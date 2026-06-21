@@ -37,43 +37,61 @@ export default function MyProfile() {
     }
 
     const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    navigate('/login');
+    return;
+  }
 
-      setUserEmail(user.email ?? '');
-      setFullName(user.user_metadata?.full_name ?? '');
-      setPhone(user.user_metadata?.phone ?? '');
-      setDepartment(user.user_metadata?.department ?? '');
-      setLoading(false);
-    };
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('email, full_name, phone, department')
+    .eq('id', user.id)
+    .single();
+
+  if (error || !profile) {
+    navigate('/login');
+    return;
+  }
+
+  setUserEmail(profile.email ?? user.email ?? '');
+  setFullName(profile.full_name ?? '');
+  setPhone(profile.phone ?? '');
+  setDepartment(profile.department ?? '');
+  setLoading(false);
+};
 
     loadProfile();
   }, [userRole, navigate]);
 
   const namePrefix = userEmail.split('@')[0];
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+ const handleSave = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        full_name: fullName,
-        phone: phone,
-        department: department,
-      },
-    });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    navigate('/login');
+    return;
+  }
 
-    if (error) {
-      alert('Failed to save profile: ' + error.message);
-      return;
-    }
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      full_name: fullName,
+      phone: phone,
+      department: department,
+    })
+    .eq('id', user.id);
 
-    setSuccessMsg(true);
-    setTimeout(() => setSuccessMsg(false), 3000);
-  };
+  if (error) {
+    alert('Failed to save profile: ' + error.message);
+    return;
+  }
+
+  setSuccessMsg(true);
+  setTimeout(() => setSuccessMsg(false), 3000);
+};
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
