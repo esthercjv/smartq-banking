@@ -3748,7 +3748,7 @@ export function SystemIntegrationScreen() {
 
   // Core configuration parameters
   const [productionUrl, setProductionUrl] = useState('https://api.smartq-banking.enterprise/v1/sync');
-  const [apiKey, setApiKey] = useState('smartq_sec_key_prod_8923a8fd89bce2');
+  const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
   // Connection testing states

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, IdCard, Lock, Eye, EyeOff, ShieldAlert, ArrowRight, Shield } from 'lucide-react';
 import { UserRole } from '../types';
+import { supabase } from '../supabaseClient';
 
 interface StaffLoginScreenProps {
   onLoginSuccess?: (email: string, role: UserRole) => void;
@@ -20,14 +21,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Demo staff/manager/admin accounts mock data 
-  const testStaffAccounts = [
-    { id: 'EMP-2024-001', pass: 'staff123!', role: 'staff' as StaffRole },
-    { id: 'EMP-2024-002', pass: 'manager123!', role: 'manager' as StaffRole },
-    { id: 'EMP-2024-003', pass: 'admin123!', role: 'admin' as StaffRole },
-  ];
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedRole) {
@@ -40,66 +34,61 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
       return;
     }
 
-    const specialCharRegex = /[^A-Za-z0-9]/;
-    if (password.length < 8 || !specialCharRegex.test(password)) {
-      setError('Password must be at least 8 characters long and have at least one special character.');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
-    // Simulate database lookup/validation
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      const normalizedInputId = employeeId.trim().toUpperCase();
-      const matchedAccount = testStaffAccounts.find(
-        (acc) => acc.id === normalizedInputId && acc.role === selectedRole
-      );
+    // Convert Employee ID to internal Supabase email format
+    const internalEmail = `${employeeId.trim().toUpperCase()}@smartqbank.com`;
 
-      // Save role in localStorage
-      localStorage.setItem('userRole', selectedRole);
-      localStorage.setItem('userEmail', normalizedInputId);
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: internalEmail,
+      password,
+    });
 
-      // Perform validation check
-      if (matchedAccount) {
-        if (password === matchedAccount.pass) {
-          if (onLoginSuccess) {
-            onLoginSuccess(matchedAccount.id, selectedRole);
-          }
-          if (selectedRole === 'staff') {
-            navigate('/queue-control-center');
-          } else {
-            navigate('/admin-dashboard');
-          }
-        } else {
-          setError(`Incorrect password. (Hint: Use "${matchedAccount.pass}" to validate the demo ${selectedRole} role)`);
-        }
-      } else {
-        // Fallback demo matching just in case they typed correctly but didn't match ID
-        if (password === 'staff123!' || password === 'manager123!' || password === 'admin123!') {
-          if (onLoginSuccess) {
-            onLoginSuccess(employeeId, selectedRole);
-          }
-          if (selectedRole === 'staff') {
-            navigate('/queue-control-center');
-          } else {
-            navigate('/admin-dashboard');
-          }
-        } else {
-          // Allow any complex enough credentials
-          if (onLoginSuccess) {
-            onLoginSuccess(employeeId, selectedRole);
-          }
-          if (selectedRole === 'staff') {
-            navigate('/queue-control-center');
-          } else {
-            navigate('/admin-dashboard');
-          }
-        }
-      }
-    }, 1200);
+    setIsLoading(false);
+
+    if (authError) {
+      setError('Invalid Employee ID or password. Please try again.');
+      return;
+    }
+
+    
+const { data: profile, error: profileError } = await supabase
+  .from('profiles')
+  .select('role, full_name, employee_id')
+  .eq('id', data.user.id)
+  .single();
+
+if (profileError || !profile) {
+  setError('Unable to load your account. Please contact your administrator.');
+  await supabase.auth.signOut();
+  return;
+}
+
+const userRole = profile.role as StaffRole;
+
+// Verify selected role matches what is actually stored in the database
+if (userRole !== selectedRole) {
+  setError('Incorrect role selected. Please select the correct role for your Employee ID.');
+  await supabase.auth.signOut();
+  return;
+}
+
+// Store only display data — role is never trusted from localStorage for access control
+localStorage.setItem('userEmail', employeeId.trim().toUpperCase());
+localStorage.setItem('userId', data.user.id);
+localStorage.setItem('userName', profile.full_name || employeeId.trim().toUpperCase());
+localStorage.setItem('employeeId', employeeId.trim().toUpperCase());
+
+if (onLoginSuccess) {
+  onLoginSuccess(employeeId, userRole);
+}
+
+if (userRole === 'staff') {
+  navigate('/queue-control-center');
+} else {
+  navigate('/admin-dashboard');
+}
   };
 
   return (
@@ -125,8 +114,8 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
       {/* Staff Login Card */}
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border-2 border-[#fed977]/30 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#fed977] via-[#e5c158] to-[#fed977]" />
-        
-        {/* Security Badge & Warning */}
+
+        {/* Security Badge */}
         <div className="mb-6 flex flex-col items-center justify-center text-center">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error-container/25 border border-error/20 text-[11px] font-bold text-error uppercase tracking-wider mb-2">
             <Lock className="w-3 h-3" /> Restricted Access
@@ -198,10 +187,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedRole('staff');
-                  setError(null);
-                }}
+                onClick={() => { setSelectedRole('staff'); setError(null); }}
                 disabled={isLoading}
                 className={`py-3 text-[11px] font-bold uppercase rounded-xl border text-center transition-all cursor-pointer leading-tight ${
                   selectedRole === 'staff'
@@ -213,10 +199,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedRole('manager');
-                  setError(null);
-                }}
+                onClick={() => { setSelectedRole('manager'); setError(null); }}
                 disabled={isLoading}
                 className={`py-3 text-[11px] font-bold uppercase rounded-xl border text-center transition-all cursor-pointer leading-tight ${
                   selectedRole === 'manager'
@@ -228,10 +211,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedRole('admin');
-                  setError(null);
-                }}
+                onClick={() => { setSelectedRole('admin'); setError(null); }}
                 disabled={isLoading}
                 className={`col-span-2 py-3 text-[11px] font-bold uppercase rounded-xl border text-center transition-all cursor-pointer leading-tight ${
                   selectedRole === 'admin'
@@ -255,7 +235,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
             </motion.div>
           )}
 
-          {/* Access Staff Portal Button */}
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading}
@@ -278,7 +258,7 @@ export default function StaffLoginScreen({ onLoginSuccess, onNavigate }: StaffLo
           </button>
         </form>
 
-        {/* Back to Customer Login link */}
+        {/* Back to Customer Login */}
         <div className="mt-8 pt-5 border-t border-outline-variant/20 text-center">
           <button
             type="button"

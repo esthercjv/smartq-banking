@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight } from 'lucide-react';
 import { UserRole } from '../types';
+import { supabase } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLoginSuccess?: (email: string, role: UserRole) => void;
@@ -17,12 +18,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigate }: LoginScreenP
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Demo accounts for credential validation
-  const testAccounts = [
-    { label: 'Customer', email: 'customer@bank.com', pass: 'customer123!', role: 'customer' as UserRole },
-  ];
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email || !password) {
@@ -30,43 +26,56 @@ export default function LoginScreen({ onLoginSuccess, onNavigate }: LoginScreenP
       return;
     }
 
-    const specialCharRegex = /[^A-Za-z0-9]/;
-    if (password.length < 8 || !specialCharRegex.test(password)) {
-      setError('Password must be at least 8 characters long and have at least one special character.');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
-    // Simulate database lookup/validation
-    setTimeout(() => {
-      setIsLoading(false);
-      const matchedAccount = testAccounts.find(
-        (acc) => acc.email.toLowerCase() === email.trim().toLowerCase()
-      );
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
-      // Save role in localStorage
-      localStorage.setItem('userRole', 'customer');
-      localStorage.setItem('userEmail', email.trim());
+    setIsLoading(false);
 
-      if (matchedAccount) {
-        if (password === matchedAccount.pass) {
-          if (onLoginSuccess) {
-            onLoginSuccess(matchedAccount.email, 'customer');
-          }
-          navigate('/customer-dashboard');
-        } else {
-          setError(`Incorrect password. (Hint: Use "${matchedAccount.pass}" to validate the demo Customer role)`);
-        }
-      } else {
-        // Any other credentials can login as customer
-        if (onLoginSuccess) {
-          onLoginSuccess(email, 'customer');
-        }
-        navigate('/customer-dashboard');
-      }
-    }, 1200);
+    if (authError) {
+      setError('Invalid email or password. Please try again.');
+      return;
+    }
+
+    const userEmail = data.user?.email ?? email.trim();
+
+// Fetch role from profiles table — more secure than user_metadata
+const { data: profile, error: profileError } = await supabase
+  .from('profiles')
+  .select('role, full_name')
+  .eq('id', data.user.id)
+  .single();
+
+if (profileError || !profile) {
+  setError('Unable to load your account. Please contact support.');
+  await supabase.auth.signOut();
+  return;
+}
+
+const role = profile.role as UserRole;
+
+// Block non-customers from using customer portal — check BEFORE
+// touching localStorage or calling onLoginSuccess
+if (role !== 'customer') {
+  setError('This portal is for customers only. Please use the Staff Portal.');
+  await supabase.auth.signOut();
+  return;
+}
+
+// Store only display data in localStorage — never used for access control
+localStorage.setItem('userEmail', userEmail);
+localStorage.setItem('userId', data.user.id);
+localStorage.setItem('userName', profile.full_name || userEmail.split('@')[0]);
+
+if (onLoginSuccess) {
+  onLoginSuccess(userEmail, role);
+}
+
+navigate('/customer-dashboard');
   };
 
   return (
@@ -92,7 +101,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigate }: LoginScreenP
       {/* Login Card */}
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border border-white/5 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-secondary-container via-secondary to-secondary-container" />
-        
+
         <h2 className="text-[24px] font-semibold text-primary mb-6">Welcome Back</h2>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
@@ -216,7 +225,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigate }: LoginScreenP
           </p>
         </div>
 
-        {/* Subtle Divider & Staff Access link */}
+        {/* Staff Access link */}
         <div className="mt-5 pt-4 border-t border-outline-variant/20 text-center">
           <p className="text-[11px] text-outline">
             Are you a staff member?

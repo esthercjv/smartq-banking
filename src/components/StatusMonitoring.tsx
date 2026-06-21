@@ -28,15 +28,24 @@ export default function StatusMonitoring() {
   const navigate = useNavigate();
 
   // Role and Auth
-  const userRole = localStorage.getItem('userRole') || 'customer';
+  const userRole = localStorage.getItem('userRole');
   const userEmail = localStorage.getItem('userEmail') || 'demo@bank.com';
   const namePrefix = userEmail.split('@')[0];
 
   useEffect(() => {
-    if (!localStorage.getItem('userRole')) {
+    if (!userRole) {
       navigate('/login');
+    } else if (userRole !== 'customer' && userRole !== 'staff' && userRole !== 'admin') {
+      // Use environment variables as the source of truth for role
+      const validCustomerRole = process.env.REACT_APP_VALID_CUSTOMER_ROLE || 'customer';
+      const validStaffRole = process.env.REACT_APP_VALID_STAFF_ROLE || 'staff';
+      const validAdminRole = process.env.REACT_APP_VALID_ADMIN_ROLE || 'admin';
+      
+      if (userRole !== validCustomerRole && userRole !== validStaffRole && userRole !== validAdminRole) {
+        navigate('/login');
+      }
     }
-  }, [navigate]);
+  }, [userRole, navigate]);
 
   // UI Interactive States
   const [searchQuery, setSearchQuery] = useState('');

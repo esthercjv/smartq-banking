@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { 
   Landmark, 
   Clock, 
@@ -21,24 +21,44 @@ import {
 export default function CustomerDashboard() {
   const navigate = useNavigate();
 
-  // Role Protection
-  const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'customer@bank.com';
-  const namePrefix = userEmail.split('@')[0];
+  // ── Secure session verification ──────────────────────────────────────────
+  const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState('');
+  const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (userRole !== 'customer') {
-      if (userRole === 'staff') {
-        navigate('/queue-control-center');
-      } else {
-        navigate('/admin-dashboard');
+    const verifySession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+        return;
       }
-    }
-  }, [userRole, navigate]);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, email')
+        .eq('id', session.user.id)
+        .single();
 
-  // Load active ticket from Supabase
+      if (!profile) {
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
+      if (profile.role !== 'customer') {
+        if (profile.role === 'staff') {
+          navigate('/queue-control-center');
+        } else {
+          navigate('/admin-dashboard');
+        }
+        return;
+      }
+      setVerifiedRole(profile.role);
+      setVerifiedEmail(profile.email || session.user.email || '');
+    };
+    verifySession();
+  }, [navigate]);
+
+  // ── Active ticket from Supabase ───────────────────────────────────────────
   const [activeTicket, setActiveTicket] = useState<any>(null);
 
   useEffect(() => {
@@ -74,11 +94,10 @@ export default function CustomerDashboard() {
         });
       }
     };
-
     loadTicket();
   }, []);
 
-  // Live Counter Updates
+  // ── Live counter simulation ───────────────────────────────────────────────
   const [liveNowServing, setLiveNowServing] = useState({
     number: '72',
     counter: 'Counter 2',
@@ -102,15 +121,10 @@ export default function CustomerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Cancel ticket — deletes from Supabase
+  // ── Cancel ticket ─────────────────────────────────────────────────────────
   const handleCancelTicket = async () => {
     if (!activeTicket?.id) return;
-
-    await supabase
-      .from('queues')
-      .delete()
-      .eq('id', activeTicket.id);
-
+    await supabase.from('queues').delete().eq('id', activeTicket.id);
     localStorage.removeItem('activeTicket');
     setActiveTicket(null);
   };
@@ -121,8 +135,15 @@ export default function CustomerDashboard() {
     navigate('/login');
   };
 
-  if (userRole !== 'customer') {
-    return null;
+  // ── Session loading guard ─────────────────────────────────────────────────
+  if (!verifiedRole) {
+    return (
+      <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+        <p className="text-sm text-on-surface-variant font-medium animate-pulse">
+          Verifying session...
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -224,8 +245,12 @@ export default function CustomerDashboard() {
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">{namePrefix}</span>
-              <span className="text-[10px] text-on-surface-variant font-medium block uppercase tracking-wider">Customer</span>
+              <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">
+                {namePrefix}
+              </span>
+              <span className="text-[10px] text-on-surface-variant font-medium block uppercase tracking-wider">
+                Customer
+              </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden border-2 border-secondary-container shadow-sm flex items-center justify-center text-white font-bold text-sm">
               {namePrefix.charAt(0).toUpperCase()}
@@ -362,13 +387,14 @@ export default function CustomerDashboard() {
                     {activeTicket.service}
                   </h4>
 
-                  {/* Scalloped virtual ticket */}
                   <div className="w-full max-w-[240px] bg-secondary-container rounded-2xl p-6 relative flex flex-col items-center gap-1 shadow-md border border-secondary/20">
                     <div className="absolute top-1/2 -left-3 w-6 h-6 bg-white rounded-full translate-y-[-50%]" />
                     <div className="absolute top-1/2 -right-3 w-6 h-6 bg-white rounded-full translate-y-[-50%]" />
 
                     <span className="text-[10px] text-[#584400] tracking-widest uppercase font-bold">Your Identifier</span>
-                    <span className="text-4xl font-extrabold text-[#0A1F44] tracking-wider font-mono my-2">{activeTicket.number}</span>
+                    <span className="text-4xl font-extrabold text-[#0A1F44] tracking-wider font-mono my-2">
+                      {activeTicket.number}
+                    </span>
                     <div className="w-full border-t border-dashed border-[#584400]/25 my-2" />
 
                     <div className="flex justify-between w-full text-left text-[#584400]/75 font-semibold text-[11px] mt-1">
@@ -395,7 +421,7 @@ export default function CustomerDashboard() {
             </div>
           </div>
 
-          {/* Quick FAQ / Info */}
+          {/* Quick Info */}
           <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/60 shadow-sm">
             <h3 className="font-bold text-primary mb-3">About SmartQ Virtual Queueing</h3>
             <p className="text-xs text-on-surface-variant leading-relaxed mb-3">

@@ -24,22 +24,32 @@ import { QueueItem } from '../types';
 export default function QueueControlCenter() {
   const navigate = useNavigate();
 
-  // Role and Auth
-  const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'staff@bank.com';
-  const namePrefix = userEmail.split('@')[0];
+  // ── Secure session verification ──────────────────────────────────────────
+  const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState('');
+  const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (userRole !== 'staff') {
-      if (userRole === 'customer') {
-        navigate('/customer-dashboard');
-      } else {
-        navigate('/admin-dashboard');
+    const verifySession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+        return;
       }
-    }
-  }, [userRole, navigate]);
+      const role = session.user.user_metadata?.role;
+      if (role !== 'staff') {
+        if (role === 'customer') {
+          navigate('/customer-dashboard');
+        } else {
+          navigate('/admin-dashboard');
+        }
+        return;
+      }
+      setVerifiedRole(role);
+      setVerifiedEmail(session.user.email ?? '');
+    };
+    verifySession();
+  }, [navigate]);
 
   const [counterStatus, setCounterStatus] = useState<'active' | 'break' | 'offline'>('active');
   const [servingTicket, setServingTicket] = useState<QueueItem | null>(null);
@@ -47,7 +57,7 @@ export default function QueueControlCenter() {
   const [servedCount, setServedCount] = useState(0);
   const [avgHandlingMinutes, setAvgHandlingMinutes] = useState(0);
 
-  // ─── Load initial waiting queue from Supabase ──────────────────────────────
+  // ─── Load initial waiting queue from Supabase ─────────────────────────────
   const loadWaitingQueue = async () => {
     const { data, error } = await supabase
       .from('queues')
@@ -74,7 +84,7 @@ export default function QueueControlCenter() {
     setWaitingQueue(mapped);
   };
 
-  // ─── Load served count from Supabase ───────────────────────────────────────
+  // ─── Load served count from Supabase ──────────────────────────────────────
   const loadServedCount = async () => {
     const { count } = await supabase
       .from('queues')
@@ -84,7 +94,7 @@ export default function QueueControlCenter() {
     setServedCount(count ?? 0);
   };
 
-  // ─── Load currently serving ticket ─────────────────────────────────────────
+  // ─── Load currently serving ticket ────────────────────────────────────────
   const loadServingTicket = async () => {
     const { data, error } = await supabase
       .from('queues')
@@ -110,14 +120,14 @@ export default function QueueControlCenter() {
     }
   };
 
-  // ─── Load all data on mount ─────────────────────────────────────────────────
+  // ─── Load all data on mount ────────────────────────────────────────────────
   useEffect(() => {
     loadWaitingQueue();
     loadServedCount();
     loadServingTicket();
   }, []);
 
-  // ─── Real-time subscription — updates waiting queue instantly ───────────────
+  // ─── Real-time subscription ────────────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
       .channel('queues-realtime')
@@ -125,7 +135,6 @@ export default function QueueControlCenter() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'queues' },
         () => {
-          // Reload all data whenever any change happens in the queues table
           loadWaitingQueue();
           loadServedCount();
           loadServingTicket();
@@ -138,7 +147,7 @@ export default function QueueControlCenter() {
     };
   }, []);
 
-  // ─── Call Next ──────────────────────────────────────────────────────────────
+  // ─── Call Next ────────────────────────────────────────────────────────────
   const handleCallNext = async () => {
     if (waitingQueue.length === 0) {
       alert('The waiting queue is currently empty.');
@@ -162,12 +171,11 @@ export default function QueueControlCenter() {
       return;
     }
 
-    // Real-time will auto-refresh, but update local state immediately for instant UI response
     setServingTicket({ ...nextTicket, status: 'serving' });
     setWaitingQueue(prev => prev.filter(t => t.id !== nextTicket.id));
   };
 
-  // ─── Complete Current ───────────────────────────────────────────────────────
+  // ─── Complete Current ─────────────────────────────────────────────────────
   const handleCompleteCurrent = async () => {
     if (!servingTicket) return;
 
@@ -188,7 +196,7 @@ export default function QueueControlCenter() {
     setServingTicket(null);
   };
 
-  // ─── No Show ───────────────────────────────────────────────────────────────
+  // ─── No Show ──────────────────────────────────────────────────────────────
   const handleNoShowCurrent = async () => {
     if (!servingTicket) return;
 
@@ -211,7 +219,16 @@ export default function QueueControlCenter() {
     navigate('/login');
   };
 
-  if (userRole !== 'staff') return null;
+  // ── Session loading guard ─────────────────────────────────────────────────
+  if (!verifiedRole) {
+    return (
+      <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+        <p className="text-sm text-on-surface-variant font-medium animate-pulse">
+          Verifying session...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
@@ -518,7 +535,6 @@ export default function QueueControlCenter() {
                 )}
               </div>
             </div>
-
           </div>
         </motion.div>
       </main>

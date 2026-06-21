@@ -1,3 +1,4 @@
+import { supabase } from '../supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -22,36 +23,75 @@ export default function MyProfile() {
 
   // Role and Auth
   const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'demo@bank.com';
-  const namePrefix = userEmail.split('@')[0];
+  const [userEmail, setUserEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [department, setDepartment] = useState('');
+  const [successMsg, setSuccessMsg] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userRole) {
       navigate('/login');
+      return;
     }
+
+    const loadProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+
+      setUserEmail(user.email ?? '');
+      setFullName(user.user_metadata?.full_name ?? '');
+      setPhone(user.user_metadata?.phone ?? '');
+      setDepartment(user.user_metadata?.department ?? '');
+      setLoading(false);
+    };
+
+    loadProfile();
   }, [userRole, navigate]);
 
-  const [fullName, setFullName] = useState(() => {
-    return namePrefix.charAt(0).toUpperCase() + namePrefix.slice(1);
-  });
-  const [phone, setPhone] = useState('+44 7911 123456');
-  const [department, setDepartment] = useState('Teller Operations, London Branch');
-  const [successMsg, setSuccessMsg] = useState(false);
+  const namePrefix = userEmail.split('@')[0];
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        full_name: fullName,
+        phone: phone,
+        department: department,
+      },
+    });
+
+    if (error) {
+      alert('Failed to save profile: ' + error.message);
+      return;
+    }
+
     setSuccessMsg(true);
     setTimeout(() => setSuccessMsg(false), 3000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.clear();
     navigate('/login');
   };
 
-  if (!userRole) {
-    return null;
-  }
+  if (!userRole) return null;
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading profile...</p>
+    </div>
+  );
+
+  const isCustomer = userRole === 'customer';
+  const isStaff = userRole === 'staff';
+  const isManagerOrAdmin = userRole === 'manager' || userRole === 'admin';
 
   // Compile dynamic layout sidebar matching selected role
   const renderSidebar = () => {
@@ -73,7 +113,7 @@ export default function MyProfile() {
           </div>
 
           <nav className="flex flex-col gap-2 flex-grow">
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/customer-dashboard')}
               className="flex items-center gap-3 p-3 rounded-xl font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
@@ -82,7 +122,7 @@ export default function MyProfile() {
               <span>Dashboard</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/queue-registration')}
               className="flex items-center gap-3 p-3 rounded-xl font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
@@ -91,7 +131,7 @@ export default function MyProfile() {
               <span>Queue Registration</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/status-monitoring')}
               className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
@@ -100,7 +140,7 @@ export default function MyProfile() {
               <span>Status Monitoring</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/wait-time-prediction')}
               className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
@@ -110,7 +150,7 @@ export default function MyProfile() {
             </button>
 
             <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => navigate('/my-profile')}
                 className="flex items-center gap-3 p-3 rounded-xl font-semibold text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-secondary-container bg-secondary-container shadow-md"
@@ -149,7 +189,7 @@ export default function MyProfile() {
           </div>
 
           <nav className="flex flex-col gap-2 flex-grow">
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/queue-control-center')}
               className="flex items-center gap-3 p-3 rounded-xl font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
@@ -158,7 +198,7 @@ export default function MyProfile() {
               <span>Queue Control Center</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/status-monitoring')}
               className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
@@ -167,7 +207,7 @@ export default function MyProfile() {
               <span>Status Monitoring</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/wait-time-prediction')}
               className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
@@ -177,7 +217,7 @@ export default function MyProfile() {
             </button>
 
             <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => navigate('/my-profile')}
                 className="flex items-center gap-3 p-3 rounded-xl font-semibold text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-secondary-container bg-secondary-container shadow-md"
@@ -217,7 +257,7 @@ export default function MyProfile() {
           </div>
 
           <nav className="flex flex-col gap-1 flex-grow overflow-y-auto pr-1">
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/admin-dashboard')}
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
@@ -226,7 +266,7 @@ export default function MyProfile() {
               <span>Admin Dashboard</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/status-monitoring')}
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
@@ -235,15 +275,15 @@ export default function MyProfile() {
               <span>Status Monitoring</span>
             </button>
 
-            {/* Shared manager & admin routes */}
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/analytics')}
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
             >
               <span>Analytics</span>
             </button>
-            <button 
+
+            <button
               type="button"
               onClick={() => navigate('/reports')}
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
@@ -251,24 +291,23 @@ export default function MyProfile() {
               <span>Reports</span>
             </button>
 
-            {/* Admin only routes */}
             {isAdmin && (
               <>
-                <button 
+                <button
                   type="button"
                   onClick={() => navigate('/counter-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
                 >
                   <span>Counter Management</span>
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={() => navigate('/service-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
                 >
                   <span>Service Management</span>
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={() => navigate('/user-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
@@ -278,7 +317,7 @@ export default function MyProfile() {
               </>
             )}
 
-            <button 
+            <button
               type="button"
               onClick={() => navigate('/wait-time-prediction')}
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
@@ -288,14 +327,14 @@ export default function MyProfile() {
 
             {isAdmin && (
               <>
-                <button 
+                <button
                   type="button"
                   onClick={() => navigate('/system-data-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
                 >
                   <span>System Data</span>
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={() => navigate('/system-integration')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
@@ -306,7 +345,7 @@ export default function MyProfile() {
             )}
 
             <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => navigate('/my-profile')}
                 className="flex items-center gap-3 p-3 rounded-xl font-semibold text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-secondary-container bg-secondary-container shadow-md"
@@ -330,13 +369,9 @@ export default function MyProfile() {
     }
   };
 
-  const isCustomer = userRole === 'customer';
-  const isStaff = userRole === 'staff';
-  const isManagerOrAdmin = userRole === 'manager' || userRole === 'admin';
-
   return (
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
-      
+
       {/* Dynamic Sidebar */}
       {renderSidebar()}
 
@@ -347,15 +382,15 @@ export default function MyProfile() {
             My Profile
           </span>
         </div>
-        
+
         <div className="flex items-center gap-4">
-          <button 
+          <button
             type="button"
             className="p-2 text-on-surface-variant hover:text-secondary rounded-lg"
           >
             <Bell className="w-5 h-5" />
           </button>
-          
+
           <div className="h-8 w-[1px] bg-outline-variant/50" />
 
           <div className="flex items-center gap-3">
@@ -383,7 +418,7 @@ export default function MyProfile() {
           </div>
 
           <form onSubmit={handleSave} className="space-y-5">
-            
+
             {/* Full Name field */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-on-surface-variant ml-0.5" htmlFor="fullName">
@@ -423,7 +458,7 @@ export default function MyProfile() {
               </div>
             </div>
 
-            {/* Contact Mobile field - Hidden from Staff roles */}
+            {/* Contact Mobile — hidden from staff */}
             {!isStaff && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-on-surface-variant ml-0.5" htmlFor="contactMobile">
@@ -445,7 +480,7 @@ export default function MyProfile() {
               </div>
             )}
 
-            {/* Department/Branch field - Hidden from Customer and Manager/Admin roles */}
+            {/* Department — staff only */}
             {!isCustomer && !isManagerOrAdmin && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-on-surface-variant ml-0.5" htmlFor="departmentBranch">

@@ -31,9 +31,16 @@ export default function QueueRegistration() {
     if (!userRole) {
       navigate('/login');
     } else if (userRole !== 'customer') {
-      if (userRole === 'staff') {
+      // Use environment variables as the source of truth for role
+      const validCustomerRole = process.env.REACT_APP_VALID_CUSTOMER_ROLE || 'customer';
+      const validStaffRole = process.env.REACT_APP_VALID_STAFF_ROLE || 'staff';
+      const validAdminRole = process.env.REACT_APP_VALID_ADMIN_ROLE || 'admin';
+      
+      if (userRole !== validCustomerRole && userRole !== validStaffRole && userRole !== validAdminRole) {
+        navigate('/login');
+      } else if (userRole === validStaffRole) {
         navigate('/queue-control-center');
-      } else {
+      } else if (userRole === validAdminRole) {
         navigate('/admin-dashboard');
       }
     }
