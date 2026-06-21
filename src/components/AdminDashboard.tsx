@@ -28,22 +28,34 @@ import { CounterStatus } from '../types';
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
-  // Role and Auth
-  const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'admin@bank.com';
-  const namePrefix = userEmail.split('@')[0];
+  // ── Secure session verification ──────────────────────────────────────────
+  const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState('');
+  const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (userRole !== 'manager' && userRole !== 'admin') {
-      if (userRole === 'customer') {
-        navigate('/customer-dashboard');
-      } else {
-        navigate('/queue-control-center');
+    const verifySession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+        return;
       }
-    }
-  }, [userRole, navigate]);
+      const role = session.user.user_metadata?.role;
+      if (role !== 'manager' && role !== 'admin') {
+        if (role === 'customer') {
+          navigate('/customer-dashboard');
+        } else {
+          navigate('/queue-control-center');
+        }
+        return;
+      }
+      setVerifiedRole(role);
+      setVerifiedEmail(session.user.email ?? '');
+    };
+    verifySession();
+  }, [navigate]);
+
+  const isAdmin = verifiedRole === 'admin';
 
   const [activeTab, setActiveTab] = useState<'overview' | 'counters'>('overview');
 
@@ -102,11 +114,15 @@ useEffect(() => {
   navigate('/login');
 };
 
-  if (userRole !== 'manager' && userRole !== 'admin') {
-    return null;
+  if (!verifiedRole) {
+    return (
+      <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+        <p className="text-sm text-on-surface-variant font-medium animate-pulse">
+          Verifying session...
+        </p>
+      </div>
+    );
   }
-
-  const isAdmin = userRole === 'admin';
 
   // Custom Chart Data
   const hourlyVolumeData = [
@@ -282,7 +298,7 @@ useEffect(() => {
           </button>
           <div className="h-8 w-[1px] bg-slate-200"></div>
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/my-profile')}>
-            <span className="text-xs font-bold text-on-surface-variant">Teller Admin</span>
+            <span className="text-xs font-bold text-on-surface-variant capitalize">{namePrefix}</span>
             <ChevronDown className="w-4 h-4 text-primary" />
           </div>
         </div>
