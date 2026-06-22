@@ -56,7 +56,7 @@ interface SidebarProps {
 
 export function AdminSidebar({ activeItem }: SidebarProps) {
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('userRole') || 'customer';
+  const userRole = useAdminSecurity();
   const isAdmin = userRole === 'admin';
 
   const handleLogout = async () => {
@@ -2718,7 +2718,7 @@ export function WaitTimePredictionScreen() {
   const userRole = useAdminSecurity();
 
   useEffect(() => {
-    if (!localStorage.getItem('userRole')) {
+    if (!userRole) {
       navigate('/login');
     }
   }, [navigate]);

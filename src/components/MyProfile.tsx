@@ -53,8 +53,6 @@ export default function MyProfile() {
 
   const namePrefix = userEmail.split('@')[0];
 
-  const namePrefix = userEmail.split('@')[0];
-
  const handleSave = async (e: React.FormEvent) => {
   e.preventDefault();
 
