@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -28,24 +29,28 @@ export default function StatusMonitoring() {
   const navigate = useNavigate();
 
   // Role and Auth
-  const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'demo@bank.com';
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (userRole !== 'customer' && userRole !== 'staff' && userRole !== 'admin') {
-      // Use environment variables as the source of truth for role
-      const validCustomerRole = process.env.REACT_APP_VALID_CUSTOMER_ROLE || 'customer';
-      const validStaffRole = process.env.REACT_APP_VALID_STAFF_ROLE || 'staff';
-      const validAdminRole = process.env.REACT_APP_VALID_ADMIN_ROLE || 'admin';
-      
-      if (userRole !== validCustomerRole && userRole !== validStaffRole && userRole !== validAdminRole) {
-        navigate('/login');
-      }
-    }
-  }, [userRole, navigate]);
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) { navigate('/login'); return; }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!profile?.role) { navigate('/login'); return; }
+      setUserRole(profile.role);
+    });
+  }, [navigate]);
+
+  // Loading guard
+  if (!userRole) return null;
 
   // UI Interactive States
   const [searchQuery, setSearchQuery] = useState('');

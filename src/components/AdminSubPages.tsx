@@ -385,9 +385,10 @@ interface CommonContentProps {
 }
 
 export function AdminLayout({ title, description, children }: CommonContentProps) {
-  const userEmail = localStorage.getItem('userEmail') || 'demo@bank.com';
+  const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
-  const userRole = localStorage.getItem('userRole');
+  const userRole = useAdminSecurity();
+  if (!userRole) return null;
 
   return (
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
@@ -417,21 +418,30 @@ export function AdminLayout({ title, description, children }: CommonContentProps
 
 // Security wrapper
 function useAdminSecurity(requiredRoles: string[] = ['manager', 'admin']) {
+  const [userRole, setUserRole] = useState<string | null>(null);
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('userRole');
+
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (!requiredRoles.includes(userRole)) {
-      if (userRole === 'customer') {
-        navigate('/customer-dashboard');
-      } else if (userRole === 'staff') {
-        navigate('/queue-control-center');
-      } else {
-        navigate('/admin-dashboard');
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) { navigate('/login'); return; }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      const role = profile?.role;
+      if (!role || !requiredRoles.includes(role)) {
+        navigate('/login');
+        return;
       }
-    }
-  }, [userRole, navigate]);
+      setUserRole(role);
+    });
+  }, [navigate]);
+
+  return userRole;
 }
 
 // Screen 1: Analytics
@@ -2705,7 +2715,7 @@ export function UserManagementScreen() {
 // Screen 6: Wait Time Prediction
 export function WaitTimePredictionScreen() {
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('userRole') || 'customer';
+  const userRole = useAdminSecurity();
 
   useEffect(() => {
     if (!localStorage.getItem('userRole')) {
@@ -3748,6 +3758,8 @@ export function SystemIntegrationScreen() {
 
   // Core configuration parameters
   const [productionUrl, setProductionUrl] = useState('https://api.smartq-banking.enterprise/v1/sync');
+  // WARNING: Never store real API keys here. This field is UI-only.
+  // Real keys must live in Supabase Edge Functions or your backend, never the browser.
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 

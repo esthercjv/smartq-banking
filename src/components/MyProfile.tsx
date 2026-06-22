@@ -22,7 +22,7 @@ export default function MyProfile() {
   const navigate = useNavigate();
 
   // Role and Auth
-  const userRole = localStorage.getItem('userRole');
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -31,38 +31,27 @@ export default function MyProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-      return;
-    }
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) { navigate('/login'); return; }
 
-    const loadProfile = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    navigate('/login');
-    return;
-  }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, email, full_name, phone, department')
+        .eq('id', session.user.id)
+        .single();
 
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('email, full_name, phone, department')
-    .eq('id', user.id)
-    .single();
+      if (!profile?.role) { navigate('/login'); return; }
+      setUserRole(profile.role);
+      setUserEmail(profile.email ?? '');
+      setFullName(profile.full_name ?? '');
+      setPhone(profile.phone ?? '');
+      setDepartment(profile.department ?? '');
+      setLoading(false);
+    });
+  }, [navigate]);
 
-  if (error || !profile) {
-    navigate('/login');
-    return;
-  }
-
-  setUserEmail(profile.email ?? user.email ?? '');
-  setFullName(profile.full_name ?? '');
-  setPhone(profile.phone ?? '');
-  setDepartment(profile.department ?? '');
-  setLoading(false);
-};
-
-    loadProfile();
-  }, [userRole, navigate]);
+  const namePrefix = userEmail.split('@')[0];
 
   const namePrefix = userEmail.split('@')[0];
 

@@ -11,7 +11,7 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'customer' | 'staff' | 'manager' | 'admin'>('customer');
+  const role = 'customer'; // Always register as customer, admins assign roles
   const [isDone, setIsDone] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -119,7 +119,7 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
                   className="block w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
                 />
               </div>
-            </div>
+              </div>
 
             {/* Password */}
             <div className="space-y-1">
@@ -139,29 +139,6 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
                   placeholder=""
                   className="block w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
                 />
-              </div>
-            </div>
-
-            {/* Role Options */}
-            <div className="space-y-1.5">
-              <label className="block text-[13px] font-semibold text-on-surface-variant ml-0.5">
-                Register Account Type
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['customer', 'staff', 'manager', 'admin'] as const).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRole(r)}
-                    className={`py-2 text-[11px] font-bold uppercase rounded-xl border text-center transition-all cursor-pointer ${
-                      role === r
-                        ? 'bg-secondary-container border-secondary text-[#584400] shadow-sm'
-                        : 'bg-surface-container-low border-outline-variant/40 text-on-surface-variant hover:bg-surface-container'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
               </div>
             </div>
 

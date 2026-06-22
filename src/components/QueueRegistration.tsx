@@ -23,28 +23,31 @@ import {
 export default function QueueRegistration() {
   const navigate = useNavigate();
 
-  const userRole = localStorage.getItem('userRole');
-  const userEmail = localStorage.getItem('userEmail') || 'customer@bank.com';
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
 
   useEffect(() => {
-    if (!userRole) {
-      navigate('/login');
-    } else if (userRole !== 'customer') {
-      // Use environment variables as the source of truth for role
-      const validCustomerRole = process.env.REACT_APP_VALID_CUSTOMER_ROLE || 'customer';
-      const validStaffRole = process.env.REACT_APP_VALID_STAFF_ROLE || 'staff';
-      const validAdminRole = process.env.REACT_APP_VALID_ADMIN_ROLE || 'admin';
-      
-      if (userRole !== validCustomerRole && userRole !== validStaffRole && userRole !== validAdminRole) {
-        navigate('/login');
-      } else if (userRole === validStaffRole) {
-        navigate('/queue-control-center');
-      } else if (userRole === validAdminRole) {
-        navigate('/admin-dashboard');
-      }
-    }
-  }, [userRole, navigate]);
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) { navigate('/login'); return; }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      const role = profile?.role;
+      if (!role) { navigate('/login'); return; }
+      if (role === 'staff') { navigate('/queue-control'); return; }
+      if (role === 'admin' || role === 'manager') { navigate('/admin'); return; }
+      if (role !== 'customer') { navigate('/login'); return; }
+      setUserRole(role);
+    });
+  }, [navigate]);
+
+  if (userRole !== 'customer') return null;
 
   const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
   const [selectedServiceId, setSelectedServiceId] = useState<string>('cash_deposit');
