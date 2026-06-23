@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient';
+﻿import { supabase } from '../supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,14 +23,11 @@ import { QueueItem } from '../types';
 
 export default function QueueControlCenter() {
   const navigate = useNavigate();
+
+  // ΓöÇΓöÇ Secure session verification ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [counterStatus, setCounterStatus] = useState<'active' | 'break' | 'offline'>('active');
-  const [servingTicket, setServingTicket] = useState<QueueItem | null>(null);
-  const [waitingQueue, setWaitingQueue] = useState<QueueItem[]>([]);
-  const [servedCount, setServedCount] = useState(0);
-  const [avgHandlingMinutes, setAvgHandlingMinutes] = useState(0);
+  const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
 
   useEffect(() => {
     const verifySession = async () => {
@@ -39,99 +36,98 @@ export default function QueueControlCenter() {
         navigate('/login');
         return;
       }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, email')
-        .eq('id', session.user.id)
-        .single();
-
-      if (!profile) {
-        await supabase.auth.signOut();
-        navigate('/login');
-        return;
-      }
-      if (profile.role !== 'staff') {
-        if (profile.role === 'customer') {
+      const role = session.user.user_metadata?.role;
+      if (role !== 'staff') {
+        if (role === 'customer') {
           navigate('/customer-dashboard');
         } else {
           navigate('/admin-dashboard');
         }
         return;
       }
-      setVerifiedRole(profile.role);
-      setVerifiedEmail(profile.email || session.user.email || '');
-      setLoading(false);
+      setVerifiedRole(role);
+      setVerifiedEmail(session.user.email ?? '');
     };
-
     verifySession();
   }, [navigate]);
 
-  useEffect(() => {
-    const loadWaitingQueue = async () => {
-      const { data, error } = await supabase
-        .from('queues')
-        .select('*')
-        .eq('status', 'waiting')
-        .order('created_at', { ascending: true });
+  const [counterStatus, setCounterStatus] = useState<'active' | 'break' | 'offline'>('active');
+  const [servingTicket, setServingTicket] = useState<QueueItem | null>(null);
+  const [waitingQueue, setWaitingQueue] = useState<QueueItem[]>([]);
+  const [servedCount, setServedCount] = useState(0);
+  const [avgHandlingMinutes, setAvgHandlingMinutes] = useState(0);
 
-      if (error) {
-        console.error('Error loading queue:', error.message);
-        return;
-      }
+  // ΓöÇΓöÇΓöÇ Load initial waiting queue from Supabase ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  const loadWaitingQueue = async () => {
+    const { data, error } = await supabase
+      .from('queues')
+      .select('*')
+      .eq('status', 'waiting')
+      .order('created_at', { ascending: true });
 
-      const mapped: QueueItem[] = (data || []).map((row: any) => ({
-        id: row.id,
-        ticketNumber: row.ticket_number,
-        customerName: row.customer_name,
-        serviceType: row.service_name,
-        status: row.status,
-        arrivalTime: row.issued_time,
-        estimatedWaitMinutes: row.estimated_wait,
+    if (error) {
+      console.error('Error loading queue:', error.message);
+      return;
+    }
+
+    const mapped: QueueItem[] = (data || []).map((row: any) => ({
+      id: row.id,
+      ticketNumber: row.ticket_number,
+      customerName: row.customer_name,
+      serviceType: row.service_name,
+      status: row.status,
+      arrivalTime: row.issued_time,
+      estimatedWaitMinutes: row.estimated_wait,
+      counterId: 'Counter 3',
+    }));
+
+    setWaitingQueue(mapped);
+  };
+
+  // ΓöÇΓöÇΓöÇ Load served count from Supabase ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  const loadServedCount = async () => {
+    const { count } = await supabase
+      .from('queues')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'completed');
+
+    setServedCount(count ?? 0);
+  };
+
+  // ΓöÇΓöÇΓöÇ Load currently serving ticket ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  const loadServingTicket = async () => {
+    const { data, error } = await supabase
+      .from('queues')
+      .select('*')
+      .eq('status', 'serving')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (data && !error) {
+      setServingTicket({
+        id: data.id,
+        ticketNumber: data.ticket_number,
+        customerName: data.customer_name,
+        serviceType: data.service_name,
+        status: data.status,
+        arrivalTime: data.issued_time,
+        estimatedWaitMinutes: data.estimated_wait,
         counterId: 'Counter 3',
-      }));
+      });
+    } else {
+      setServingTicket(null);
+    }
+  };
 
-      setWaitingQueue(mapped);
-    };
-
-    const loadServedCount = async () => {
-      const { count } = await supabase
-        .from('queues')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'completed');
-
-      setServedCount(count ?? 0);
-    };
-
-    const loadServingTicket = async () => {
-      const { data, error } = await supabase
-        .from('queues')
-        .select('*')
-        .eq('status', 'serving')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (data && !error) {
-        setServingTicket({
-          id: data.id,
-          ticketNumber: data.ticket_number,
-          customerName: data.customer_name,
-          serviceType: data.service_name,
-          status: data.status,
-          arrivalTime: data.issued_time,
-          estimatedWaitMinutes: data.estimated_wait,
-          counterId: 'Counter 3',
-        });
-      } else {
-        setServingTicket(null);
-      }
-    };
-
+  // ΓöÇΓöÇΓöÇ Load all data on mount ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  useEffect(() => {
     loadWaitingQueue();
     loadServedCount();
     loadServingTicket();
   }, []);
 
+  // ΓöÇΓöÇΓöÇ Real-time subscription ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   useEffect(() => {
     const channel = supabase
       .channel('queues-realtime')
@@ -151,6 +147,7 @@ export default function QueueControlCenter() {
     };
   }, []);
 
+  // ΓöÇΓöÇΓöÇ Call Next ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const handleCallNext = async () => {
     if (waitingQueue.length === 0) {
       alert('The waiting queue is currently empty.');
@@ -178,6 +175,7 @@ export default function QueueControlCenter() {
     setWaitingQueue(prev => prev.filter(t => t.id !== nextTicket.id));
   };
 
+  // ΓöÇΓöÇΓöÇ Complete Current ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const handleCompleteCurrent = async () => {
     if (!servingTicket) return;
 
@@ -198,6 +196,7 @@ export default function QueueControlCenter() {
     setServingTicket(null);
   };
 
+  // ΓöÇΓöÇΓöÇ No Show ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const handleNoShowCurrent = async () => {
     if (!servingTicket) return;
 
@@ -220,12 +219,7 @@ export default function QueueControlCenter() {
     navigate('/login');
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
-      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
-    </div>
-  );
-
+  // ΓöÇΓöÇ Session loading guard ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   if (!verifiedRole) {
     return (
       <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
@@ -335,11 +329,11 @@ export default function QueueControlCenter() {
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">{verifiedEmail ? verifiedEmail.split('@')[0] : ''}</span>
+              <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">{namePrefix}</span>
               <span className="text-[10px] text-on-surface-variant font-medium block uppercase tracking-wider">Staff</span>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden border-2 border-secondary-container shadow-sm flex items-center justify-center text-white font-bold text-sm">
-              {verifiedEmail ? verifiedEmail.split('@')[0].charAt(0).toUpperCase() : ''}
+              {namePrefix.charAt(0).toUpperCase()}
             </div>
           </div>
         </div>
