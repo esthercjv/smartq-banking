@@ -74,7 +74,6 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
 
   return <>{children}</>;
 }
-
 // ─── Auth Layout ─────────────────────────────────────────────────────────────
 interface AuthLayoutProps {
   children: React.ReactNode;

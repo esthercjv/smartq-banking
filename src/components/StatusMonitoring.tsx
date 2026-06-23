@@ -30,6 +30,7 @@ export default function StatusMonitoring() {
 
   // Role and Auth
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
 
@@ -46,11 +47,15 @@ export default function StatusMonitoring() {
 
       if (!profile?.role) { navigate('/login'); return; }
       setUserRole(profile.role);
+      setLoading(false);
     });
   }, [navigate]);
 
-  // Loading guard
-  if (!userRole) return null;
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
 
   // UI Interactive States
   const [searchQuery, setSearchQuery] = useState('');

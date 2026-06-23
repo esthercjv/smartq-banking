@@ -20,11 +20,10 @@ import {
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
-
-  // ── Secure session verification ──────────────────────────────────────────
   const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState('');
-  const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
+  const [loading, setLoading] = useState(true);
+  const [namePrefix, setNamePrefix] = useState('');
 
   useEffect(() => {
     const verifySession = async () => {
@@ -53,10 +52,19 @@ export default function CustomerDashboard() {
         return;
       }
       setVerifiedRole(profile.role);
-      setVerifiedEmail(profile.email || session.user.email || '');
+      setNamePrefix(profile.email?.split('@')[0] ?? '');
+      setVerifiedEmail(profile.email ?? '');
+      setLoading(false);
     };
+
     verifySession();
   }, [navigate]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
 
   // ── Active ticket from Supabase ───────────────────────────────────────────
   const [activeTicket, setActiveTicket] = useState<any>(null);

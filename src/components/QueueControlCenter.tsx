@@ -31,23 +31,36 @@ export default function QueueControlCenter() {
 
   useEffect(() => {
     const verifySession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/login');
-        return;
-      }
-      const role = session.user.user_metadata?.role;
-      if (role !== 'staff') {
-        if (role === 'customer') {
-          navigate('/customer-dashboard');
-        } else {
-          navigate('/admin-dashboard');
-        }
-        return;
-      }
-      setVerifiedRole(role);
-      setVerifiedEmail(session.user.email ?? '');
-    };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    navigate('/login');
+    return;
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, email')
+    .eq('id', session.user.id)
+    .single();
+
+  if (!profile) {
+    await supabase.auth.signOut();
+    navigate('/login');
+    return;
+  }
+
+  if (profile.role !== 'staff') {
+    if (profile.role === 'customer') {
+      navigate('/customer-dashboard');
+    } else {
+      navigate('/admin-dashboard');
+    }
+    return;
+  }
+
+  setVerifiedRole(profile.role);
+  setVerifiedEmail(profile.email || session.user.email || '');
+};
     verifySession();
   }, [navigate]);
 

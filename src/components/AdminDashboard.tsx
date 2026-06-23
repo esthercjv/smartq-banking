@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   // ── Secure session verification ──────────────────────────────────────────
   const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState('');
+  const [loading, setLoading] = useState(true);
   const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
 
   useEffect(() => {
@@ -51,91 +52,16 @@ export default function AdminDashboard() {
       }
       setVerifiedRole(role);
       setVerifiedEmail(session.user.email ?? '');
+      setLoading(false);
     };
     verifySession();
   }, [navigate]);
 
-  const isAdmin = verifiedRole === 'admin';
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'counters'>('overview');
-
-  // Simulated metrics
- const [totalUsers, setTotalUsers] = useState<string>('—');
-const [queuesToday, setQueuesToday] = useState<string>('—');
-
-useEffect(() => {
-  const loadMetrics = async () => {
-    // Get total users count
-    const { data: usersData } = await supabase.rpc('get_all_users');
-    if (usersData) {
-      setTotalUsers(usersData.length.toLocaleString());
-    }
-
-    // Get today's queues count
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const { count } = await supabase
-      .from('queues')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', today.toISOString());
-    if (count !== null) {
-      setQueuesToday(count.toLocaleString());
-    }
-  };
-
-  loadMetrics();
-}, []);
-
-  // Simulated counters
-  const [counters, setCounters] = useState<CounterStatus[]>([
-    { id: '1', number: 1, staffName: 'Jane Smith', currentTicket: 'A-124', status: 'active', serviceType: 'Teller & Cash Transactions' },
-    { id: '2', number: 2, staffName: 'John Doe', currentTicket: 'C-209', status: 'active', serviceType: 'Loans & Mortgages' },
-    { id: '3', number: 3, staffName: 'Alex Mercer', currentTicket: 'A-242', status: 'active', serviceType: 'Teller & Cash Transactions' },
-    { id: '4', number: 4, staffName: 'Sarah Connor', currentTicket: undefined, status: 'break', serviceType: 'New Accounts & Services' },
-    { id: '5', number: 5, staffName: 'Bruce Wayne', currentTicket: undefined, status: 'offline', serviceType: 'Wealth & Priority Banking' },
-  ]);
-
-  const toggleCounterStatus = (id: string) => {
-    setCounters(prev =>
-      prev.map(c => {
-        if (c.id === id) {
-          const nextStatus: CounterStatus['status'] =
-            c.status === 'active' ? 'break' : c.status === 'break' ? 'offline' : 'active';
-          return { ...c, status: nextStatus };
-        }
-        return c;
-      })
-    );
-  };
-
- const handleLogout = async () => {
-  await supabase.auth.signOut();
-  localStorage.clear();
-  navigate('/login');
-};
-
-  if (!verifiedRole) {
-    return (
-      <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
-        <p className="text-sm text-on-surface-variant font-medium animate-pulse">
-          Verifying session...
-        </p>
-      </div>
-    );
-  }
-
-  // Custom Chart Data
-  const hourlyVolumeData = [
-    { hour: '8AM', tickets: 45 },
-    { hour: '9AM', tickets: 62 },
-    { hour: '10AM', tickets: 95 },
-    { hour: '11AM', tickets: 110 },
-    { hour: '12PM', tickets: 85 },
-    { hour: '1PM', tickets: 55 },
-    { hour: '2PM', tickets: 78 },
-    { hour: '3PM', tickets: 105 },
-    { hour: '4PM', tickets: 90 },
-  ];
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">

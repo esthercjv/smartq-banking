@@ -70,6 +70,7 @@ if (role !== 'customer') {
 localStorage.setItem('userEmail', userEmail);
 localStorage.setItem('userId', data.user.id);
 localStorage.setItem('userName', profile.full_name || userEmail.split('@')[0]);
+localStorage.setItem('userRole', role);
 
 if (onLoginSuccess) {
   onLoginSuccess(userEmail, role);

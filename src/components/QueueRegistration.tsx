@@ -24,6 +24,7 @@ export default function QueueRegistration() {
   const navigate = useNavigate();
 
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
 
@@ -44,8 +45,15 @@ export default function QueueRegistration() {
       if (role === 'admin' || role === 'manager') { navigate('/admin'); return; }
       if (role !== 'customer') { navigate('/login'); return; }
       setUserRole(role);
+      setLoading(false);
     });
   }, [navigate]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
 
   if (userRole !== 'customer') return null;
 

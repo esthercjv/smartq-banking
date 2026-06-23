@@ -79,6 +79,7 @@ localStorage.setItem('userEmail', employeeId.trim().toUpperCase());
 localStorage.setItem('userId', data.user.id);
 localStorage.setItem('userName', profile.full_name || employeeId.trim().toUpperCase());
 localStorage.setItem('employeeId', employeeId.trim().toUpperCase());
+localStorage.setItem('userRole', userRole); 
 
 if (onLoginSuccess) {
   onLoginSuccess(employeeId, userRole);

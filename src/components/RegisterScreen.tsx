@@ -119,7 +119,7 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
                   className="block w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
                 />
               </div>
-              </div>
+            </div>
 
             {/* Password */}
             <div className="space-y-1">
