@@ -28,7 +28,7 @@ export default function QueueControlCenter() {
   const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const namePrefix = verifiedEmail ? verifiedEmail.split('@')[0] : '';
-
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     const verifySession = async () => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -49,18 +49,19 @@ export default function QueueControlCenter() {
     return;
   }
 
-  if (profile.role !== 'staff') {
-    if (profile.role === 'customer') {
-      navigate('/customer-dashboard');
-    } else {
-      navigate('/admin-dashboard');
-    }
-    return;
-  }
+      if (profile.role !== 'staff') {
+        if (profile.role === 'customer') {
+          navigate('/customer-dashboard');
+        } else {
+          navigate('/admin-dashboard');
+        }
+        return;
+      }
 
-  setVerifiedRole(profile.role);
-  setVerifiedEmail(profile.email || session.user.email || '');
-};
+      setVerifiedRole(profile.role);
+      setVerifiedEmail(profile.email || session.user.email || '');
+      setLoading(false);
+    };
     verifySession();
   }, [navigate]);
 
@@ -233,6 +234,12 @@ export default function QueueControlCenter() {
   };
 
   // ── Session loading guard ─────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
+
   if (!verifiedRole) {
     return (
       <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">

@@ -419,6 +419,7 @@ export function AdminLayout({ title, description, children }: CommonContentProps
 // Security wrapper
 function useAdminSecurity(requiredRoles: string[] = ['manager', 'admin']) {
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -438,6 +439,7 @@ function useAdminSecurity(requiredRoles: string[] = ['manager', 'admin']) {
         return;
       }
       setUserRole(role);
+      setLoading(false);
     });
   }, [navigate]);
 

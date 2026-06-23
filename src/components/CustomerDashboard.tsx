@@ -26,39 +26,42 @@ export default function CustomerDashboard() {
   const [namePrefix, setNamePrefix] = useState('');
 
   useEffect(() => {
-    const verifySession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/login');
-        return;
-      }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, email')
-        .eq('id', session.user.id)
-        .single();
+  const verifySession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate('/login');
+      return;
+    }
 
-      if (!profile) {
-        await supabase.auth.signOut();
-        navigate('/login');
-        return;
-      }
-      if (profile.role !== 'customer') {
-        if (profile.role === 'staff') {
-          navigate('/queue-control-center');
-        } else {
-          navigate('/admin-dashboard');
-        }
-        return;
-      }
-      setVerifiedRole(profile.role);
-      setNamePrefix(profile.email?.split('@')[0] ?? '');
-      setVerifiedEmail(profile.email ?? '');
-      setLoading(false);
-    };
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, email')
+      .eq('id', session.user.id)
+      .single();
 
-    verifySession();
-  }, [navigate]);
+    if (!profile) {
+      await supabase.auth.signOut();
+      navigate('/login');
+      return;
+    }
+
+    if (profile.role !== 'customer') {
+      if (profile.role === 'staff') {
+        navigate('/queue-control-center');
+      } else {
+        navigate('/admin-dashboard');
+      }
+      return;
+    }
+
+    // All checks passed — set state and stop loading
+    setVerifiedRole(profile.role);
+    setNamePrefix(profile.email?.split('@')[0] ?? '');
+    setLoading(false);
+  };
+
+  verifySession();
+}, [navigate]);
 
   if (loading) return (
     <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
