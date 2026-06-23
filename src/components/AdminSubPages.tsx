@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient';
+﻿import { supabase } from '../supabaseClient';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -56,7 +56,7 @@ interface SidebarProps {
 
 export function AdminSidebar({ activeItem }: SidebarProps) {
   const navigate = useNavigate();
-  const userRole = useAdminSecurity();
+  const userRole = localStorage.getItem('userRole') || 'customer';
   const isAdmin = userRole === 'admin';
 
   const handleLogout = async () => {
@@ -419,7 +419,6 @@ export function AdminLayout({ title, description, children }: CommonContentProps
 // Security wrapper
 function useAdminSecurity(requiredRoles: string[] = ['manager', 'admin']) {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -439,7 +438,6 @@ function useAdminSecurity(requiredRoles: string[] = ['manager', 'admin']) {
         return;
       }
       setUserRole(role);
-      setLoading(false);
     });
   }, [navigate]);
 
@@ -953,9 +951,9 @@ export function ReportsScreen() {
 
   // Saved reports list state
   const [savedReports, setSavedReports] = useState<SavedReport[]>([
-    { id: '1', name: 'Monthly Performance_Oct23', author: 'Alex Chen', createdOn: 'Oct 31, 2023 • 05:30 PM', type: 'Efficiency', status: 'Ready' },
-    { id: '2', name: 'Q3_Teller_Audit_Internal', author: 'System Automated', createdOn: 'Oct 15, 2023 • 09:00 AM', type: 'Audit', status: 'Ready' },
-    { id: '3', name: 'Peak_Traffic_Analysis_W42', author: 'Maria G.', createdOn: 'Oct 12, 2023 • 11:20 AM', type: 'Traffic', status: 'Archived' }
+    { id: '1', name: 'Monthly Performance_Oct23', author: 'Alex Chen', createdOn: 'Oct 31, 2023 ΓÇó 05:30 PM', type: 'Efficiency', status: 'Ready' },
+    { id: '2', name: 'Q3_Teller_Audit_Internal', author: 'System Automated', createdOn: 'Oct 15, 2023 ΓÇó 09:00 AM', type: 'Audit', status: 'Ready' },
+    { id: '3', name: 'Peak_Traffic_Analysis_W42', author: 'Maria G.', createdOn: 'Oct 12, 2023 ΓÇó 11:20 AM', type: 'Traffic', status: 'Archived' }
   ]);
 
   // Handle Generate Report simulation
@@ -972,7 +970,7 @@ export function ReportsScreen() {
         id: Date.now().toString(),
         name: dynamicName,
         author: 'You (Staff Panel)',
-        createdOn: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        createdOn: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ΓÇó ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         type: reportType.includes('Efficiency') ? 'Efficiency' : reportType.includes('Audit') || reportType.includes('Performance') ? 'Audit' : 'Traffic',
         status: 'Ready'
       };
@@ -1220,7 +1218,7 @@ export function ReportsScreen() {
 
                 <div className="py-2">
                   <span className="text-4xl font-extrabold font-mono tracking-tight text-white block">94.2%</span>
-                  <span className="text-xs text-green-400 font-semibold block mt-1">↑ 2.4% vs last period</span>
+                  <span className="text-xs text-green-400 font-semibold block mt-1">Γåæ 2.4% vs last period</span>
                 </div>
                 
                 <p className="text-[11px] text-blue-200/60 leading-relaxed font-semibold">
@@ -1409,7 +1407,7 @@ export function ReportsScreen() {
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Analytics Systems • Authorized Access Only
+            SmartQ Analytics Systems ΓÇó Authorized Access Only
           </footer>
 
         </div>
@@ -1770,7 +1768,7 @@ export function CounterManagementScreen() {
 
           {/* Footer lock bottom */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Desks Registry • Authorized Admins Protocol
+            SmartQ Desks Registry ΓÇó Authorized Admins Protocol
           </footer>
 
         </div>
@@ -2284,7 +2282,7 @@ export function ServiceManagementScreen() {
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Services Network Portal • Secured System Access
+            SmartQ Services Network Portal ΓÇó Secured System Access
           </footer>
 
         </div>
@@ -2359,9 +2357,9 @@ export function ServiceManagementScreen() {
                     onChange={(e) => setFormPriority(e.target.value as 'High' | 'Med' | 'Low')}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none cursor-pointer"
                   >
-                    <option value="High">🔴 High Priority</option>
-                    <option value="Med">🟡 Medium Priority</option>
-                    <option value="Low">⚪ Low Priority</option>
+                    <option value="High">≡ƒö┤ High Priority</option>
+                    <option value="Med">≡ƒƒí Medium Priority</option>
+                    <option value="Low">ΓÜ¬ Low Priority</option>
                   </select>
                 </div>
 
@@ -2372,8 +2370,8 @@ export function ServiceManagementScreen() {
                     onChange={(e) => setFormStatus(e.target.value as 'Active' | 'Inactive')}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none cursor-pointer"
                   >
-                    <option value="Active">🟢 Active Rotation</option>
-                    <option value="Inactive">⚫ Offline/Inactive</option>
+                    <option value="Active">≡ƒƒó Active Rotation</option>
+                    <option value="Inactive">ΓÜ½ Offline/Inactive</option>
                   </select>
                 </div>
               </div>
@@ -2596,7 +2594,7 @@ export function UserManagementScreen() {
                             </div>
                             <div>
                               <span className="font-extrabold text-xs text-primary block">
-                                {user.full_name || '—'}
+                                {user.full_name || 'ΓÇö'}
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono">{user.id.slice(0, 8)}...</span>
                             </div>
@@ -2696,7 +2694,7 @@ export function UserManagementScreen() {
           </section>
 
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Security Central Core • Branch Registry System
+            SmartQ Security Central Core ΓÇó Branch Registry System
           </footer>
         </div>
       </AdminLayout>
@@ -2720,7 +2718,7 @@ export function WaitTimePredictionScreen() {
   const userRole = useAdminSecurity();
 
   useEffect(() => {
-    if (!userRole) {
+    if (!localStorage.getItem('userRole')) {
       navigate('/login');
     }
   }, [navigate]);
@@ -3092,7 +3090,7 @@ const computedDuration = isModelActive
                   <div className="text-xs font-bold text-right">
                     <span className="text-outline block uppercase tracking-wider text-[10px]">Engine Status</span>
                     <span className={`font-black uppercase text-xs ${isModelActive ? 'text-green-600' : 'text-rose-600'}`}>
-                      {isModelActive ? '● Active' : '● Inactive'}
+                      {isModelActive ? 'ΓùÅ Active' : 'ΓùÅ Inactive'}
                     </span>
                   </div>
 
@@ -3231,7 +3229,7 @@ const computedDuration = isModelActive
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/50 text-[10px] uppercase tracking-widest leading-loose">
-            SmartQ Predictive Engine v4.2.0 • Powered by Enterprise ML Core
+            SmartQ Predictive Engine v4.2.0 ΓÇó Powered by Enterprise ML Core
           </footer>
 
         </div>
@@ -3547,7 +3545,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-[#fed977]/30 text-[#755b00] shrink-0 flex items-center justify-center font-bold">
-                        ♿
+                        ΓÖ┐
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">Senior Citizens & Accessibility</p>
@@ -3571,7 +3569,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-blue-150 text-blue-700 shrink-0 flex items-center justify-center font-bold">
-                        💎
+                        ≡ƒÆÄ
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">VIP & Private Banking Tier</p>
@@ -3595,7 +3593,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 shrink-0 flex items-center justify-center font-bold">
-                        ⚡
+                        ΓÜí
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">Quick Transaction Express</p>
@@ -3646,7 +3644,7 @@ export function SystemDataScreen() {
                     className="px-6 py-2.5 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm font-semibold flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
                   >
                     {isSaving ? (
-                      <span className="animate-spin text-sm block">⏳</span>
+                      <span className="animate-spin text-sm block">ΓÅ│</span>
                     ) : (
                       <Save className="w-3.5 h-3.5" />
                     )}
@@ -3722,7 +3720,7 @@ export function SystemDataScreen() {
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Global Cluster Portal • Security Tier Zero Access
+            SmartQ Global Cluster Portal ΓÇó Security Tier Zero Access
           </footer>
 
         </div>
@@ -3953,7 +3951,7 @@ export function SystemIntegrationScreen() {
                     className="flex-1 sm:flex-none px-4 py-2.5 bg-[#00081e] hover:opacity-90 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
                   >
                     {isTesting ? (
-                      <span className="animate-spin">⏳</span>
+                      <span className="animate-spin">ΓÅ│</span>
                     ) : (
                       <RefreshCw className="w-3.5 h-3.5" />
                     )}
@@ -3967,7 +3965,7 @@ export function SystemIntegrationScreen() {
                     className="flex-1 sm:flex-none px-4 py-2.5 bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
                   >
                     {isSaving ? (
-                      <span className="animate-spin">⏳</span>
+                      <span className="animate-spin">ΓÅ│</span>
                     ) : (
                       <Save className="w-3.5 h-3.5" />
                     )}
@@ -4120,7 +4118,7 @@ export function SystemIntegrationScreen() {
 
           {/* Footer lock bottom */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Gateway Hub Core • Branch Tunnel System
+            SmartQ Gateway Hub Core ΓÇó Branch Tunnel System
           </footer>
 
         </div>

@@ -266,7 +266,7 @@ if (error) {
               <div key={step} className="flex items-center gap-3 flex-1 last:flex-initial">
                 <div className={`w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all ${
                   regStep === step 
-                    ? 'bg-secondary-container border border-secondary text-[#584400] scale-[1.05]'
+                    ? 'bg-secondary-container border border-secondary text-[#584400] scale-[1.05]' 
                     : regStep > step 
                       ? 'bg-green-100 text-green-700' 
                       : 'bg-surface-container-low border border-outline-variant/30 text-outline'

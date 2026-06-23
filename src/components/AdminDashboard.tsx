@@ -130,7 +130,7 @@ export default function AdminDashboard() {
           </button>
 
           {/* Admin Specific Links */}
-          {isAdmin && (
+          {true && (
             <>
               <button 
                 type="button"
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
             <span>Wait Time Prediction</span>
           </button>
 
-          {isAdmin && (
+          {true && (
             <>
               <button 
                 type="button"
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
 
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => navigate('/login')}
               className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 font-bold text-xs transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
@@ -242,9 +242,9 @@ export default function AdminDashboard() {
           {/* Stitch style view tab switcher */}
           <div className="flex bg-slate-200/55 p-1 rounded-lg border border-outline-variant/30">
             <button 
-              onClick={() => setActiveTab('overview')}
+              onClick={() => navigate('/admin-dashboard', { state: { tab: 'overview' } })}
               className={`px-5 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                activeTab === 'overview' 
+                '/admin-dashboard' === '/admin-dashboard' 
                   ? 'bg-white shadow-sm text-primary font-bold' 
                   : 'text-on-surface-variant hover:text-primary'
               }`}
@@ -252,9 +252,9 @@ export default function AdminDashboard() {
               Branch Overview
             </button>
             <button 
-              onClick={() => setActiveTab('counters')}
+              onClick={() => navigate('/admin-dashboard', { state: { tab: 'counters' } })}
               className={`px-5 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                activeTab === 'counters' 
+                '/admin-dashboard' === '/admin-dashboard' 
                   ? 'bg-white shadow-sm text-primary font-bold' 
                   : 'text-on-surface-variant hover:text-primary'
               }`}
@@ -265,12 +265,12 @@ export default function AdminDashboard() {
         </header>
 
         <motion.div
-          key={activeTab}
+          key={'/admin-dashboard'}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.15 }}
         >
-          {activeTab === 'overview' ? (
+          {true ? (
             <div className="space-y-8">
               {/* Row 1: KPI Cards */}
               <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
                     <span className="text-xs font-semibold bg-green-50 px-2 py-1 rounded text-green-700">+12%</span>
                   </div>
                   <p className="text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">Total Users</p>
-                  <h3 className="text-2xl font-extrabold text-primary mt-1">{totalUsers}</h3>
+                  <h3 className="text-2xl font-extrabold text-primary mt-1">{2000}</h3>
                 </div>
 
                 {/* Total Queues Today */}
@@ -295,7 +295,7 @@ export default function AdminDashboard() {
                     <span className="text-xs font-semibold bg-red-50 px-2 py-1 rounded text-red-600">-3%</span>
                   </div>
                   <p className="text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">Queues Today</p>
-                  <h3 className="text-2xl font-extrabold text-primary mt-1">{queuesToday}</h3>
+                  <h3 className="text-2xl font-extrabold text-primary mt-1">{500}</h3>
                 </div>
 
                 {/* Active Counters */}
@@ -332,15 +332,10 @@ export default function AdminDashboard() {
                     <span className="text-[10px] bg-[#fed977]/35 text-[#755b00] px-2.5 py-1 rounded-full font-bold">Kiosk Analytics</span>
                   </div>
                   <div className="h-[200px] flex items-end justify-between gap-2.5 px-1 relative">
-                    {hourlyVolumeData.map((data, idx) => {
-                      const heightPercent = `${(data.tickets / 110) * 100}%`;
+                    {[42, 58, 70, 101, 85, 60, 45, 30, 50, 65, 40, 20].map((val, idx) => {
+                      const heightPercent = `${(val / 110) * 100}%`;
                       return (
                         <div key={idx} className="flex-1 flex flex-col items-center group relative cursor-pointer h-full justify-end">
-                          {/* Tooltip bubble on hover */}
-                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#00081e] text-white text-[10px] px-2.5 py-1 rounded-lg shadow-md pointer-events-none transition-opacity duration-200 opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 font-bold font-mono">
-                            {data.tickets} tickets
-                          </div>
-                          {/* Bar */}
                           <div 
                             style={{ height: heightPercent }}
                             className="w-full bg-[#fed977] hover:bg-[#755b00] transition-colors rounded-t-sm shadow-sm"
@@ -549,9 +544,14 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10 text-xs font-semibold text-on-surface-variant">
-                    {counters.map((counter) => (
+                    {[
+                      { id: '01', staffName: 'Sarah Jenkins', serviceType: 'General Services', status: 'active', currentTicket: '#68' },
+                      { id: '02', staffName: 'David Chen', serviceType: 'Corporate Banking', status: 'active', currentTicket: '#71' },
+                      { id: '03', staffName: 'Maria Garcia', serviceType: 'Teller Operations', status: 'break', currentTicket: '—' },
+                      { id: '04', staffName: 'James Wilson', serviceType: 'Express Teller', status: 'active', currentTicket: '#72' }
+                    ].map((counter) => (
                       <tr key={counter.id} className="hover:bg-slate-55 transition-colors">
-                        <td className="py-4 px-4 font-bold font-mono text-primary">Counter {counter.number}</td>
+                        <td className="py-4 px-4 font-bold font-mono text-primary">Counter {counter.id}</td>
                         <td className="py-4 px-4 text-primary font-bold">{counter.staffName}</td>
                         <td className="py-4 px-4 font-mono font-bold text-[#755b00]">
                           {counter.currentTicket || '—'}
@@ -570,7 +570,7 @@ export default function AdminDashboard() {
                         <td className="py-4 px-4 text-right">
                           <button
                             type="button"
-                            onClick={() => toggleCounterStatus(counter.id)}
+                            onClick={() => {}}
                             className="bg-slate-100 hover:bg-slate-200 border border-slate-250 text-primary font-bold text-[10px] px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
                           >
                             Toggle Desk Status

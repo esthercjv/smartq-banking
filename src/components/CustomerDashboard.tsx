@@ -24,53 +24,50 @@ export default function CustomerDashboard() {
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [namePrefix, setNamePrefix] = useState('');
+  const [activeTicket, setActiveTicket] = useState<any>(null);
+  const [liveNowServing, setLiveNowServing] = useState({
+    number: '72',
+    counter: 'Counter 2',
+    service: 'Cash Withdrawal'
+  });
 
   useEffect(() => {
-  const verifySession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      navigate('/login');
-      return;
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, email')
-      .eq('id', session.user.id)
-      .single();
-
-    if (!profile) {
-      await supabase.auth.signOut();
-      navigate('/login');
-      return;
-    }
-
-    if (profile.role !== 'customer') {
-      if (profile.role === 'staff') {
-        navigate('/queue-control-center');
-      } else {
-        navigate('/admin-dashboard');
+    const verifySession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+        return;
       }
-      return;
-    }
 
-    // All checks passed — set state and stop loading
-    setVerifiedRole(profile.role);
-    setNamePrefix(profile.email?.split('@')[0] ?? '');
-    setLoading(false);
-  };
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, email')
+        .eq('id', session.user.id)
+        .single();
 
-  verifySession();
-}, [navigate]);
+      if (!profile) {
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
-      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
-    </div>
-  );
+      if (profile.role !== 'customer') {
+        if (profile.role === 'staff') {
+          navigate('/queue-control-center');
+        } else {
+          navigate('/admin-dashboard');
+        }
+        return;
+      }
 
-  // ── Active ticket from Supabase ───────────────────────────────────────────
-  const [activeTicket, setActiveTicket] = useState<any>(null);
+      setVerifiedRole(profile.role);
+      setNamePrefix(profile.email?.split('@')[0] ?? '');
+      setVerifiedEmail(profile.email ?? '');
+      setLoading(false);
+    };
+
+    verifySession();
+  }, [navigate]);
 
   useEffect(() => {
     const loadTicket = async () => {
@@ -108,13 +105,6 @@ export default function CustomerDashboard() {
     loadTicket();
   }, []);
 
-  // ── Live counter simulation ───────────────────────────────────────────────
-  const [liveNowServing, setLiveNowServing] = useState({
-    number: '72',
-    counter: 'Counter 2',
-    service: 'Cash Withdrawal'
-  });
-
   useEffect(() => {
     const originalServingTickets = ['72', 'A-108', 'B-240', 'C-114', 'D-302', 'E-019'];
     const counters = ['Counter 2', 'Counter 1', 'Counter 4', 'Counter 3', 'Counter 5', 'Counter 6'];
@@ -132,7 +122,6 @@ export default function CustomerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Cancel ticket ─────────────────────────────────────────────────────────
   const handleCancelTicket = async () => {
     if (!activeTicket?.id) return;
     await supabase.from('queues').delete().eq('id', activeTicket.id);
@@ -146,7 +135,12 @@ export default function CustomerDashboard() {
     navigate('/login');
   };
 
-  // ── Session loading guard ─────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
+
   if (!verifiedRole) {
     return (
       <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
