@@ -29,62 +29,65 @@ export default function StatusMonitoring() {
   const navigate = useNavigate();
 
   // Role and Auth
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const userEmail = localStorage.getItem('userEmail') || '';
-  const namePrefix = userEmail.split('@')[0];
+const [userRole, setUserRole] = useState<string | null>(null);
+const [loading, setLoading] = useState(true);
+const [searchQuery, setSearchQuery] = useState('');
+const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'serving'>('all');
+const [autoRefresh, setAutoRefresh] = useState(true);
+const [highlightedTickets, setHighlightedTickets] = useState<Record<string, boolean>>({});
+const [showFullLogs, setShowFullLogs] = useState(false);
+const [reloadPulse, setReloadPulse] = useState(false);
+const [queueTickets, setQueueTickets] = useState([
+  { id: '#72', service: 'Cash Deposit', wait: '08:45', status: 'Serving', counter: 'Counter 04', customer: 'James Wilson' },
+  { id: '#73', service: 'Account Inquiry', wait: '12:10', status: 'Waiting', counter: '—', customer: 'Sarah Connor' },
+  { id: '#74', service: 'Card Collection', wait: '15:30', status: 'Waiting', counter: '—', customer: 'Alex Mercer' },
+  { id: '#75', service: 'Loan Consultation', wait: '18:22', status: 'Waiting', counter: '—', customer: 'Bruce Wayne' },
+  { id: '#71', service: 'Account Closure', wait: '22:05', status: 'Completed', counter: 'Counter 02', customer: 'David Chen' },
+  { id: '#76', service: 'General Services', wait: '02:15', status: 'Waiting', counter: '—', customer: 'Zoe Vance' },
+]);
+const [counterDashboard, setCounterDashboard] = useState([
+  { id: '01', staff: 'Sarah Jenkins', service: 'General Services', status: 'Active', serving: '#68' },
+  { id: '02', staff: 'David Chen', service: 'Corporate Banking', status: 'Active', serving: '#71' },
+  { id: '03', staff: 'Maria Garcia', service: 'Teller Operations', status: 'On Break', serving: '—' },
+  { id: '04', staff: 'James Wilson', service: 'Express Teller', status: 'Active', serving: '#72' },
+]);
+const [auditLogs, setAuditLogs] = useState<string[]>([
+  '06:45 PM: Ticket #72 called to Counter 04 by teller James Wilson.',
+  '06:42 PM: Ticket #71 processed and marked completed at Counter 02.',
+  '06:30 PM: System sync completed. Auto-refreshing branch line distribution.',
+  '06:15 PM: Teller operations initialized. Main lobby kiosk online.'
+]);
+
+const [userEmail, setUserEmail] = useState('');
+const namePrefix = userEmail ? userEmail.split('@')[0] : '';
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const session = data.session;
-      if (!session) { navigate('/login'); return; }
+  const verifySession = async () => {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    if (!session) { navigate('/login'); return; }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role, email')
+      .eq('id', session.user.id)
+      .single();
 
-      if (!profile?.role) { navigate('/login'); return; }
-      setUserRole(profile.role);
-    });
-  }, [navigate]);
+    if (error || !profile) {
+      await supabase.auth.signOut();
+      navigate('/login');
+      return;
+    }
 
-  // Loading guard
-  if (!userRole) return null;
+    setUserRole(profile.role);
+    setUserEmail(profile.email || session.user.email || '');
+    setLoading(false);
+  };
 
-  // UI Interactive States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'serving'>('all');
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [highlightedTickets, setHighlightedTickets] = useState<Record<string, boolean>>({});
-  const [showFullLogs, setShowFullLogs] = useState(false);
-  const [reloadPulse, setReloadPulse] = useState(false);
+  verifySession();
+}, [navigate]);
 
-  // Core Data sets
-  const [queueTickets, setQueueTickets] = useState([
-    { id: '#72', service: 'Cash Deposit', wait: '08:45', status: 'Serving', counter: 'Counter 04', customer: 'James Wilson' },
-    { id: '#73', service: 'Account Inquiry', wait: '12:10', status: 'Waiting', counter: 'ΓÇö', customer: 'Sarah Connor' },
-    { id: '#74', service: 'Card Collection', wait: '15:30', status: 'Waiting', counter: 'ΓÇö', customer: 'Alex Mercer' },
-    { id: '#75', service: 'Loan Consultation', wait: '18:22', status: 'Waiting', counter: 'ΓÇö', customer: 'Bruce Wayne' },
-    { id: '#71', service: 'Account Closure', wait: '22:05', status: 'Completed', counter: 'Counter 02', customer: 'David Chen' },
-    { id: '#76', service: 'General Services', wait: '02:15', status: 'Waiting', counter: 'ΓÇö', customer: 'Zoe Vance' },
-  ]);
-
-  const [counterDashboard, setCounterDashboard] = useState([
-    { id: '01', staff: 'Sarah Jenkins', service: 'General Services', status: 'Active', serving: '#68' },
-    { id: '02', staff: 'David Chen', service: 'Corporate Banking', status: 'Active', serving: '#71' },
-    { id: '03', staff: 'Maria Garcia', service: 'Teller Operations', status: 'On Break', serving: 'ΓÇö' },
-    { id: '04', staff: 'James Wilson', service: 'Express Teller', status: 'Active', serving: '#72' },
-  ]);
-
-  const [auditLogs, setAuditLogs] = useState<string[]>([
-    '06:45 PM: Ticket #72 called to Counter 04 by teller James Wilson.',
-    '06:42 PM: Ticket #71 processed and marked completed at Counter 02.',
-    '06:30 PM: System sync completed. Auto-refreshing branch line distribution.',
-    '06:15 PM: Teller operations initialized. Main lobby kiosk online.'
-  ]);
-
-  // Auto-simulation of active banking terminal events
+    // Auto-simulation of active banking terminal events
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -120,10 +123,18 @@ export default function StatusMonitoring() {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate('/login');
-  };
+   if (loading) return (
+    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
+      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading...</p>
+    </div>
+  );
+  if (!userRole) return null;
+  
+const handleLogout = async () => {
+  await supabase.auth.signOut();
+  localStorage.clear();
+  navigate('/login');
+};
 
   const handleReloadBoard = () => {
     setReloadPulse(true);
