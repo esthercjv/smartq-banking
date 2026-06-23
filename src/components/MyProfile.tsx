@@ -92,14 +92,6 @@ export default function MyProfile() {
     navigate('/login');
   };
 
-  if (!userRole) return null;
-
-  if (loading) return (
-    <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
-      <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading profile...</p>
-    </div>
-  );
-
   const isCustomer = userRole === 'customer';
   const isStaff = userRole === 'staff';
   const isManagerOrAdmin = userRole === 'manager' || userRole === 'admin';

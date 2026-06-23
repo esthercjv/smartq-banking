@@ -40,7 +40,7 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session) {
         setAllowed(false);
@@ -48,9 +48,15 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
         return;
       }
 
-      const role = session.user.user_metadata?.role as string;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
 
-      if (!allowedRoles || allowedRoles.includes(role)) {
+      const role = profile?.role as string | undefined;
+
+      if (!allowedRoles || (role && allowedRoles.includes(role))) {
         setAllowed(true);
       } else {
         setAllowed(false);

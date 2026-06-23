@@ -41,7 +41,20 @@ export default function AdminDashboard() {
         navigate('/login');
         return;
       }
-      const role = session.user.user_metadata?.role;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, email')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!profile) {
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
+
+      const role = profile.role;
       if (role !== 'manager' && role !== 'admin') {
         if (role === 'customer') {
           navigate('/customer-dashboard');
