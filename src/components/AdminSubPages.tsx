@@ -56,7 +56,25 @@ interface SidebarProps {
 
 export function AdminSidebar({ activeItem }: SidebarProps) {
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('userRole') || 'customer';
+  const [userRole, setUserRole] = useState<string>('customer');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.role) {
+        setUserRole(profile.role);
+      }
+    });
+  }, []);
+
   const isAdmin = userRole === 'admin';
 
   const handleLogout = async () => {
@@ -387,7 +405,7 @@ interface CommonContentProps {
 export function AdminLayout({ title, description, children }: CommonContentProps) {
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
-  const userRole = useAdminSecurity();
+  const userRole = useAdminSecurity(['customer', 'staff', 'manager', 'admin']);
   if (!userRole) return null;
 
   return (
@@ -2715,13 +2733,7 @@ export function UserManagementScreen() {
 // Screen 6: Wait Time Prediction
 export function WaitTimePredictionScreen() {
   const navigate = useNavigate();
-  const userRole = useAdminSecurity();
-
-  useEffect(() => {
-    if (!localStorage.getItem('userRole')) {
-      navigate('/login');
-    }
-  }, [navigate]);
+  const userRole = useAdminSecurity(['customer', 'staff', 'manager', 'admin']);
 
   // Core forecast states
   const [serviceCode, setServiceCode] = useState<string>('cash_deposit');

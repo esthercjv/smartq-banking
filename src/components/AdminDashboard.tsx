@@ -64,7 +64,7 @@ export default function AdminDashboard() {
         return;
       }
       setVerifiedRole(role);
-      setVerifiedEmail(session.user.email ?? '');
+      setVerifiedEmail(profile.email || session.user.email || '');
       setLoading(false);
     };
     verifySession();

@@ -40,7 +40,8 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
+    const verify = async () => {
+      const { data } = await supabase.auth.getSession();
       const session = data.session;
       if (!session) {
         setAllowed(false);
@@ -48,22 +49,30 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', session.user.id)
         .single();
 
-      const role = profile?.role as string | undefined;
+      if (error || !profile) {
+        setAllowed(false);
+        setChecking(false);
+        return;
+      }
 
-      if (!allowedRoles || (role && allowedRoles.includes(role))) {
+      const role = profile.role as string;
+
+      if (!allowedRoles || allowedRoles.includes(role)) {
         setAllowed(true);
       } else {
         setAllowed(false);
       }
 
       setChecking(false);
-    });
+    };
+
+    verify();
   }, []);
 
   if (checking) {
@@ -200,77 +209,126 @@ function AppRoutes() {
         }
       />
 
-      {/* Customer-only routes */}
-      <Route path="/customer-dashboard" element={
-        <ProtectedRoute allowedRoles={['customer']}>
-          <CustomerDashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/queue-registration" element={
-        <ProtectedRoute allowedRoles={['customer']}>
-          <QueueRegistration />
-        </ProtectedRoute>
-      } />
-      <Route path="/status-monitoring" element={
-        <ProtectedRoute allowedRoles={['customer']}>
-          <StatusMonitoring />
-        </ProtectedRoute>
-      } />
+     {/* Customer-only routes */}
+<Route
+  path="/customer-dashboard"
+  element={
+    <ProtectedRoute allowedRoles={['customer']}>
+      <CustomerDashboard />
+    </ProtectedRoute>
+  }
+/>
 
-      {/* Staff-only routes */}
-      <Route path="/queue-control-center" element={
-        <ProtectedRoute allowedRoles={['staff']}>
-          <QueueControlCenter />
-        </ProtectedRoute>
-      } />
+<Route
+  path="/queue-registration"
+  element={
+    <ProtectedRoute allowedRoles={['customer']}>
+      <QueueRegistration />
+    </ProtectedRoute>
+  }
+/>
 
-      {/* Manager + Admin routes */}
-      <Route path="/admin-dashboard" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <AdminDashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/analytics" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <AnalyticsScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/reports" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <ReportsScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/counter-management" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <CounterManagementScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/service-management" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <ServiceManagementScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/user-management" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <UserManagementScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/wait-time-prediction" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
-          <WaitTimePredictionScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/system-data-management" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <SystemDataScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/system-integration" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <SystemIntegrationScreen />
-        </ProtectedRoute>
-      } />
+<Route
+  path="/status-monitoring"
+  element={
+    <ProtectedRoute allowedRoles={['customer', 'staff', 'manager', 'admin']}>
+      <StatusMonitoring />
+    </ProtectedRoute>
+  }
+/>
 
+{/* Wait Time Prediction */}
+<Route
+  path="/wait-time-prediction"
+  element={
+    <ProtectedRoute allowedRoles={['customer', 'staff', 'manager', 'admin']}>
+      <WaitTimePredictionScreen />
+    </ProtectedRoute>
+  }
+/>
+
+{/* Staff-only routes */}
+<Route
+  path="/queue-control-center"
+  element={
+    <ProtectedRoute allowedRoles={['staff']}>
+      <QueueControlCenter />
+    </ProtectedRoute>
+  }
+/>
+
+{/* Manager + Admin routes */}
+<Route
+  path="/admin-dashboard"
+  element={
+    <ProtectedRoute allowedRoles={['manager', 'admin']}>
+      <AdminDashboard />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/analytics"
+  element={
+    <ProtectedRoute allowedRoles={['manager', 'admin', 'staff']}>
+      <AnalyticsScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/reports"
+  element={
+    <ProtectedRoute allowedRoles={['manager', 'admin']}>
+      <ReportsScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/counter-management"
+  element={
+    <ProtectedRoute allowedRoles={['manager', 'admin']}>
+      <CounterManagementScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/service-management"
+  element={
+    <ProtectedRoute allowedRoles={['manager', 'admin']}>
+      <ServiceManagementScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/user-management"
+  element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <UserManagementScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/system-data-management"
+  element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <SystemDataScreen />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/system-integration"
+  element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <SystemIntegrationScreen />
+    </ProtectedRoute>
+  }
+/>
       {/* Shared route */}
       <Route path="/my-profile" element={
         <ProtectedRoute>
