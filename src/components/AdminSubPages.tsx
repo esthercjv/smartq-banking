@@ -1458,7 +1458,7 @@ interface Counter {
 }
 
 export function CounterManagementScreen() {
-  useAdminSecurity(['admin']);
+  useAdminSecurity(['manager', 'admin']);
 
   // Initial counters list
   const [counters, setCounters] = useState<Counter[]>([
@@ -1924,7 +1924,7 @@ interface ServiceItem {
 }
 
 export function ServiceManagementScreen() {
-  useAdminSecurity(['admin']);
+  useAdminSecurity(['manager', 'admin']);
 
   // Core Service Catalog State
   const [services, setServices] = useState<ServiceItem[]>([
@@ -3285,7 +3285,7 @@ const computedDuration = isModelActive
 
 // Screen 7: System Data Management
 export function SystemDataScreen() {
-  useAdminSecurity(['admin']);
+  useAdminSecurity(['manager', 'admin']);
   const navigate = useNavigate();
 
   // Core configuration engine parameters

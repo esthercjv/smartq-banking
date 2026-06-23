@@ -315,7 +315,7 @@ function AppRoutes() {
 <Route
   path="/system-data-management"
   element={
-    <ProtectedRoute allowedRoles={['admin']}>
+    <ProtectedRoute allowedRoles={['manager', 'admin']}>
       <SystemDataScreen />
     </ProtectedRoute>
   }

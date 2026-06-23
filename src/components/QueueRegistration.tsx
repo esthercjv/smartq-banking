@@ -47,8 +47,8 @@ export default function QueueRegistration() {
 
       const role = profile?.role;
       if (!role) { navigate('/login'); return; }
-      if (role === 'staff') { navigate('/queue-control'); return; }
-      if (role === 'admin' || role === 'manager') { navigate('/admin'); return; }
+      if (role === 'staff') { navigate('/queue-control-center'); return; }
+      if (role === 'admin' || role === 'manager') { navigate('/admin-dashboard'); return; }
       if (role !== 'customer') { navigate('/login'); return; }
       setUserRole(role);
       setLoading(false);

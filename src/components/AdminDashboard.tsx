@@ -142,36 +142,35 @@ export default function AdminDashboard() {
             <span>Reports</span>
           </button>
 
-          {/* Admin Specific Links */}
-          {true && (
-            <>
-              <button 
-                type="button"
-                onClick={() => navigate('/counter-management')}
-                className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
-              >
-                <Sliders className="w-4 h-4 shrink-0" />
-                <span>Counter Management</span>
-              </button>
+          {/* Counter Management & Service Management — visible to both Admin and Manager */}
+          <button 
+            type="button"
+            onClick={() => navigate('/counter-management')}
+            className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
+          >
+            <Sliders className="w-4 h-4 shrink-0" />
+            <span>Counter Management</span>
+          </button>
 
-              <button 
-                type="button"
-                onClick={() => navigate('/service-management')}
-                className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
-              >
-                <Settings className="w-4 h-4 shrink-0" />
-                <span>Service Management</span>
-              </button>
+          <button 
+            type="button"
+            onClick={() => navigate('/service-management')}
+            className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
+          >
+            <Settings className="w-4 h-4 shrink-0" />
+            <span>Service Management</span>
+          </button>
 
-              <button 
-                type="button"
-                onClick={() => navigate('/user-management')}
-                className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
-              >
-                <Users className="w-4 h-4 shrink-0" />
-                <span>User Management</span>
-              </button>
-            </>
+          {/* User Management — Admin only */}
+          {verifiedRole === 'admin' && (
+            <button 
+              type="button"
+              onClick={() => navigate('/user-management')}
+              className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
+            >
+              <Users className="w-4 h-4 shrink-0" />
+              <span>User Management</span>
+            </button>
           )}
 
           <button 
@@ -183,25 +182,26 @@ export default function AdminDashboard() {
             <span>Wait Time Prediction</span>
           </button>
 
-          {true && (
-            <>
-              <button 
-                type="button"
-                onClick={() => navigate('/system-data-management')}
-                className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
-              >
-                <Terminal className="w-4 h-4 shrink-0" />
-                <span>System Data</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => navigate('/system-integration')}
-                className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
-              >
-                <SettingsIcon className="w-4 h-4 shrink-0" />
-                <span>System Integration</span>
-              </button>
-            </>
+          {/* System Data — visible to both Admin and Manager */}
+          <button 
+            type="button"
+            onClick={() => navigate('/system-data-management')}
+            className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
+          >
+            <Terminal className="w-4 h-4 shrink-0" />
+            <span>System Data</span>
+          </button>
+
+          {/* System Integration — Admin only */}
+          {verifiedRole === 'admin' && (
+            <button 
+              type="button"
+              onClick={() => navigate('/system-integration')}
+              className="flex items-center gap-3 p-3 text-blue-100/60 hover:text-white hover:bg-primary transition-colors rounded-lg text-xs text-left cursor-pointer"
+            >
+              <SettingsIcon className="w-4 h-4 shrink-0" />
+              <span>System Integration</span>
+            </button>
           )}
 
           {/* Footer controls */}

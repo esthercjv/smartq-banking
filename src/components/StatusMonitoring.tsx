@@ -360,7 +360,7 @@ const handleLogout = async () => {
         <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto pr-1 custom-scrollbar">
           <button 
             type="button"
-            onClick={() => navigate(isAdmin ? '/admin-dashboard' : '/manager-dashboard')}
+            onClick={() => navigate('/admin-dashboard')}
             className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
           >
             <LayoutDashboard className="w-4 h-4 shrink-0" />
