@@ -25,6 +25,12 @@ export default function QueueRegistration() {
 
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('cash_deposit');
+  const [fullName, setFullName] = useState<string>('');
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [additionalNote, setAdditionalNote] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
 
@@ -57,12 +63,6 @@ export default function QueueRegistration() {
 
   if (userRole !== 'customer') return null;
 
-  const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('cash_deposit');
-  const [fullName, setFullName] = useState<string>('');
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
-  const [additionalNote, setAdditionalNote] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const services = [
     { id: 'cash_deposit', name: 'Cash Deposit', code: 'A', wait: 5, icon: 'payments', desc: 'Secure over-the-counter payments & currency updates' },
