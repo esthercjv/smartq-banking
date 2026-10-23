@@ -2,18 +2,28 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import NotificationBell from './NotificationBell';
+import StaffNotificationBell from './StaffNotificationBell';
+import ManagementNotificationBell from './ManagementNotificationBell';
+import { deviceAlert, getAlertPermission, requestAlertPermission } from './ticketAlerts';
+import {
+  DATASET_BASE,
+  PEAK_FACTORS,
+  getTimeOfDayKey,
+  predictWaitMinutes,
+  predictWaitRounded,
+  type TimeOfDayKey,
+} from '../predictWait';
 import { 
   Landmark, 
   LogOut, 
   Settings as SettingsIcon,
   LayoutDashboard,
   Activity,
-  Bell,
   TrendingUp,
   FileText,
   Users2,
   Sliders,
-  Cpu,
   Database,
   Link,
   Download,
@@ -31,7 +41,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  CheckCircle,
   Briefcase,
   Calendar,
   Plus,
@@ -204,17 +213,6 @@ export function AdminSidebar({ activeItem }: SidebarProps) {
             <span>Analytics</span>
           </button>
 
-          <button 
-            type="button"
-            onClick={() => navigate('/wait-time-prediction')}
-            className={`flex items-center gap-3 p-3 rounded-xl font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer ${
-              activeItem === 'wait-time-prediction' ? 'text-on-secondary-container bg-secondary-container shadow-md font-semibold hover:text-on-secondary-container' : 'text-blue-100/60 hover:bg-white/5'
-            }`}
-          >
-            <Timer className="w-4 h-4 shrink-0" />
-            <span>Wait Time Prediction</span>
-          </button>
-
           <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
             <button 
               type="button"
@@ -266,46 +264,55 @@ export function AdminSidebar({ activeItem }: SidebarProps) {
           }`}
         >
           <LayoutDashboard className="w-4 h-4 shrink-0" />
-          <span>Admin Dashboard</span>
+          <span>Dashboard</span>
         </button>
 
-        <button 
-          onClick={() => navigate('/status-monitoring')}
-          className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all text-blue-100/60 hover:bg-white/5"
-        >
-          <Activity className="w-4 h-4 shrink-0" />
-          <span>Status Monitoring</span>
-        </button>
+        {/* Manager only */}
+        {userRole === 'manager' && (
+          <>
+            <button 
+              onClick={() => navigate('/status-monitoring')}
+              className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
+                activeItem === 'status-monitoring' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+              }`}
+            >
+              <Activity className="w-4 h-4 shrink-0" />
+              <span>Status Monitoring</span>
+            </button>
 
-        {/* Shared Links */}
-        <button 
-          onClick={() => navigate('/analytics')}
-          className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-            activeItem === 'analytics' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
-          }`}
-        >
-          <span>Analytics</span>
-        </button>
+            <button 
+              onClick={() => navigate('/analytics')}
+              className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
+                activeItem === 'analytics' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 shrink-0" />
+              <span>Analytics</span>
+            </button>
 
-        <button 
-          onClick={() => navigate('/reports')}
-          className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-            activeItem === 'reports' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
-          }`}
-        >
-          <span>Reports</span>
-        </button>
+            <button 
+              onClick={() => navigate('/reports')}
+              className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
+                activeItem === 'reports' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+              }`}
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>Reports</span>
+            </button>
+          </>
+        )}
 
         {/* Admin only */}
         {isAdmin && (
           <>
             <button 
-              onClick={() => navigate('/counter-management')}
+              onClick={() => navigate('/user-management')}
               className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-                activeItem === 'counter-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+                activeItem === 'user-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
               }`}
             >
-              <span>Counter Management</span>
+              <Users className="w-4 h-4 shrink-0" />
+              <span>User Management</span>
             </button>
             <button 
               onClick={() => navigate('/service-management')}
@@ -313,45 +320,17 @@ export function AdminSidebar({ activeItem }: SidebarProps) {
                 activeItem === 'service-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
               }`}
             >
+              <Sliders className="w-4 h-4 shrink-0" />
               <span>Service Management</span>
             </button>
             <button 
-              onClick={() => navigate('/user-management')}
+              onClick={() => navigate('/counter-management')}
               className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-                activeItem === 'user-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+                activeItem === 'counter-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
               }`}
             >
-              <span>User Management</span>
-            </button>
-          </>
-        )}
-
-        <button 
-          onClick={() => navigate('/wait-time-prediction')}
-          className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-            activeItem === 'wait-time-prediction' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold hover:text-on-secondary-container' : 'text-blue-100/60 hover:bg-white/5'
-          }`}
-        >
-          <span>Wait Time Prediction</span>
-        </button>
-
-        {isAdmin && (
-          <>
-            <button 
-              onClick={() => navigate('/system-data-management')}
-              className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-                activeItem === 'system-data-management' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
-              }`}
-            >
-              <span>System Data</span>
-            </button>
-            <button 
-              onClick={() => navigate('/system-integration')}
-              className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
-                activeItem === 'system-integration' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
-              }`}
-            >
-              <span>System Integration</span>
+              <Layout className="w-4 h-4 shrink-0" />
+              <span>Counter Management</span>
             </button>
           </>
         )}
@@ -359,7 +338,9 @@ export function AdminSidebar({ activeItem }: SidebarProps) {
         <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
           <button 
             onClick={() => navigate('/my-profile')}
-            className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
+            className={`flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all ${
+              activeItem === 'my-profile' ? 'text-on-secondary-container bg-secondary-container shadow-sm font-semibold' : 'text-blue-100/60 hover:bg-white/5'
+            }`}
           >
             <SettingsIcon className="w-4 h-4 shrink-0" />
             <span>My Profile</span>
@@ -387,7 +368,7 @@ interface CommonContentProps {
 export function AdminLayout({ title, description, children }: CommonContentProps) {
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
-  const userRole = useAdminSecurity();
+  const userRole = useAdminSecurity(['customer', 'staff', 'manager', 'admin']);
   if (!userRole) return null;
 
   return (
@@ -395,6 +376,13 @@ export function AdminLayout({ title, description, children }: CommonContentProps
       <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-8 z-40">
         <span className="font-semibold text-lg text-primary tracking-tight">{title}</span>
         <div className="flex items-center gap-3">
+          {userRole === 'customer' ? (
+            <NotificationBell />
+          ) : userRole === 'staff' ? (
+            <StaffNotificationBell />
+          ) : (
+            <ManagementNotificationBell role={userRole === 'admin' ? 'admin' : 'manager'} />
+          )}
           <div className="text-right">
             <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">{namePrefix}</span>
             <span className="text-[10px] text-on-surface-variant font-medium block uppercase tracking-wider">{userRole}</span>
@@ -451,45 +439,430 @@ export function AnalyticsScreen() {
   const [hoveredBar, setHoveredBar] = useState<number | null>(null);
   const [exportToast, setExportToast] = useState<string | null>(null);
 
-  // Dynamic values depending on filter
-  const metrics = {
-    today: {
-      served: { count: '1,284', change: '12.5%' },
-      wait: { duration: '08:42', text: 'min', change: '4.2%' },
-      peak: { val: '11:00 AM' },
-      util: { val: '94.2%', change: '8.1%' }
-    },
-    week: {
-      served: { count: '8,492', change: '8.3%' },
-      wait: { duration: '09:12', text: 'min', change: '2.1%' },
-      peak: { val: '11:30 AM' },
-      util: { val: '91.8%', change: '4.2%' }
-    },
-    month: {
-      served: { count: '34,204', change: '15.1%' },
-      wait: { duration: '08:10', text: 'min', change: '5.4%' },
-      peak: { val: '11:00 AM' },
-      util: { val: '93.1%', change: '12.3%' }
+  // Operational window and SLA thresholds (local time). Change these in one
+  // place if the branch schedule or service targets move.
+  const OPEN_HOUR = 8;
+  const CLOSE_HOUR = 18;
+  const SLA_EXCELLENT_MIN = 5;
+  const SLA_HEALTHY_MIN = 15;
+
+  const [rows, setRows] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ---- Local-time date helpers ----
+  const startOfDay = (d: Date) => {
+    const copy = new Date(d);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+  const addDays = (d: Date, days: number) => {
+    const copy = new Date(d);
+    copy.setDate(copy.getDate() + days);
+    return copy;
+  };
+
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const currentDays = timeFilter === 'today' ? 1 : timeFilter === 'week' ? 7 : 30;
+  const rangeStart = timeFilter === 'today' ? todayStart : addDays(todayStart, -(currentDays - 1));
+  const rangeEnd = now;
+  const prevStart = timeFilter === 'today' ? addDays(todayStart, -1) : addDays(rangeStart, -currentDays);
+  const prevEnd = rangeStart;
+
+  // ---- Load real queue data (paginated, refreshed every 30s) ----
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const loadAnalytics = async () => {
+      const nowTs = new Date();
+      const sevenDaysAgo = new Date(nowTs.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const fetchFrom = new Date(Math.min(prevStart.getTime(), sevenDaysAgo.getTime()));
+
+      const PAGE = 1000;
+      const collected: any[] = [];
+      let from = 0;
+
+      try {
+        // Supabase caps responses at 1000 rows, so page until a short page arrives.
+        while (!cancelled) {
+          const { data, error } = await supabase
+            .from('queues')
+            .select('id, service_name, status, created_at, called_at, completed_at, counter_id, estimated_wait')
+            .gte('created_at', fetchFrom.toISOString())
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE - 1);
+
+          if (error) {
+            console.error('AnalyticsScreen: failed to load queue analytics', error.message);
+            if (!cancelled) { setRows([]); setIsLoading(false); }
+            return;
+          }
+
+          const page = (data || []) as any[];
+          collected.push(...page);
+          if (page.length < PAGE) break;
+          from += PAGE;
+        }
+
+        if (!cancelled) {
+          setRows(collected);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('AnalyticsScreen: failed to load queue analytics', err);
+        if (!cancelled) { setRows([]); setIsLoading(false); }
+      }
+    };
+
+    setIsLoading(true);
+    loadAnalytics();
+    timer = setInterval(loadAnalytics, 30000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [timeFilter]);
+
+  // ---- Formatting helpers ----
+  const formatMmSs = (ms: number | null): string => {
+    if (ms === null || !Number.isFinite(ms)) return '--:--';
+    const total = Math.max(0, Math.round(ms / 1000));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+  const formatMmSsOrDash = (ms: number | null): string =>
+    ms === null || !Number.isFinite(ms) ? '—' : formatMmSs(ms);
+  const formatCompact = (n: number): string =>
+    n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
+  const formatHourLabel = (hour: number): string => {
+    const suffix = hour < 12 ? 'AM' : 'PM';
+    const h12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${h12}:00 ${suffix}`;
+  };
+  const mean = (vals: number[]): number | null =>
+    vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  const pctChange = (current: number | null, previous: number | null): number | null =>
+    current !== null && previous !== null && previous > 0
+      ? ((current - previous) / previous) * 100
+      : null;
+
+  // ---- Aggregate the fetched rows in JavaScript ----
+  const toTime = (value: string | null | undefined): number | null => {
+    if (!value) return null;
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+  };
+
+  const enriched = rows.map((r: any) => {
+    const createdMs = toTime(r.created_at);
+    const calledMs = toTime(r.called_at);
+    const completedMs = toTime(r.completed_at);
+    const waitMs = createdMs !== null && calledMs !== null && calledMs >= createdMs ? calledMs - createdMs : null;
+    const serviceMs = calledMs !== null && completedMs !== null && completedMs >= calledMs ? completedMs - calledMs : null;
+    return { ...r, createdMs, calledMs, completedMs, waitMs, serviceMs };
+  });
+
+  const inWindow = (t: number | null, start: Date, end: Date) =>
+    t !== null && t >= start.getTime() && t < end.getTime();
+
+  const periodRows = enriched.filter(r => inWindow(r.createdMs, rangeStart, rangeEnd));
+  const prevRows = enriched.filter(r => inWindow(r.createdMs, prevStart, prevEnd));
+  const periodCalled = enriched.filter(r => inWindow(r.calledMs, rangeStart, rangeEnd));
+  const prevCalled = enriched.filter(r => inWindow(r.calledMs, prevStart, prevEnd));
+  const justWaits = (list: typeof enriched) =>
+    list.map(r => r.waitMs).filter((v): v is number => v !== null);
+
+  // Prediction accuracy for the selected period: completed tickets in the
+  // period that carry both a prediction and a call time. Actual wait and
+  // errors are in minutes (actual = called_at - created_at).
+  const predictionStats = (() => {
+    const evaluated = periodRows.filter(
+      r =>
+        r.status === 'completed' &&
+        r.estimated_wait !== null &&
+        r.estimated_wait !== undefined &&
+        r.calledMs !== null
+    );
+    if (evaluated.length === 0) return null;
+
+    let accurateCount = 0;
+    let absErrorSum = 0;
+    let signedErrorSum = 0;
+    for (const r of evaluated) {
+      const actualMin = Math.round(((r.calledMs as number) - (r.createdMs as number)) / 60000);
+      const predicted = Number(r.estimated_wait);
+      const diff = actualMin - predicted;
+      if (Math.abs(diff) <= Math.max(5, 0.25 * predicted)) accurateCount++;
+      absErrorSum += Math.abs(diff);
+      signedErrorSum += diff;
     }
+    const count = evaluated.length;
+    return {
+      evaluated: count,
+      accuratePct: Math.round((accurateCount / count) * 100),
+      meanError: Math.round((absErrorSum / count) * 10) / 10,
+      signedError: Math.round((signedErrorSum / count) * 10) / 10
+    };
+  })();
+
+  // Customers Served
+  const servedCurrent = periodRows.filter(r => r.status === 'completed').length;
+  const servedPrev = prevRows.filter(r => r.status === 'completed').length;
+  const servedChange = pctChange(servedCurrent, servedPrev);
+
+  // Average wait time (tickets whose called_at falls inside the window)
+  const waitCurrent = mean(justWaits(periodCalled));
+  const waitPrev = mean(justWaits(prevCalled));
+  const waitChange = pctChange(waitCurrent, waitPrev);
+
+  // Peak hour (most tickets created, by local hour)
+  const hourCounts = new Map<number, number>();
+  periodRows.forEach(r => {
+    const h = new Date(r.createdMs as number).getHours();
+    hourCounts.set(h, (hourCounts.get(h) || 0) + 1);
+  });
+  let peakHour: number | null = null;
+  let peakCount = 0;
+  hourCounts.forEach((count, hour) => {
+    if (count > peakCount) { peakCount = count; peakHour = hour; }
+  });
+
+  // Counter utilisation
+  const availableMinutes = (isPrevious: boolean) => {
+    if (timeFilter === 'today' && !isPrevious) {
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      return Math.max(0, Math.min(nowMinutes, CLOSE_HOUR * 60) - OPEN_HOUR * 60);
+    }
+    const days = timeFilter === 'today' ? 1 : currentDays;
+    return days * (CLOSE_HOUR - OPEN_HOUR) * 60;
   };
 
-  const activeMetrics = metrics[timeFilter];
-
-  const hourlyVolumes = {
-    today: [42, 58, 70, 101, 85, 60, 45, 30, 50, 65, 40, 20],
-    week: [310, 420, 560, 780, 650, 480, 390, 240, 410, 520, 310, 150],
-    month: [1200, 1680, 2100, 3120, 2700, 1950, 1510, 1040, 1650, 2200, 1310, 750]
+  const buildCounterUtil = (list: typeof enriched, available: number) => {
+    const found = Array.from(
+      new Set(list.map(r => r.counter_id).filter((c): c is string => !!c))
+    );
+    const serviceByCounter = new Map<string, number>();
+    list.forEach(r => {
+      if (r.counter_id && r.status === 'completed' && r.serviceMs !== null) {
+        serviceByCounter.set(r.counter_id, (serviceByCounter.get(r.counter_id) || 0) + r.serviceMs);
+      }
+    });
+    const util = new Map<string, number>();
+    found.forEach(counter => {
+      const ms = serviceByCounter.get(counter) || 0;
+      const pct = available > 0 ? (ms / (available * 60000)) * 100 : 0;
+      util.set(counter, Math.min(100, Math.max(0, pct)));
+    });
+    return util;
   };
 
-  const activeHourly = hourlyVolumes[timeFilter];
-  const maxHourly = Math.max(...activeHourly);
+  const currentCounterUtil = buildCounterUtil(periodRows, availableMinutes(false));
+  const prevCounterUtil = buildCounterUtil(prevRows, availableMinutes(true));
+  const averageOf = (m: Map<string, number>) =>
+    m.size ? Array.from(m.values()).reduce((a, b) => a + b, 0) / m.size : null;
+  const avgUtilCurrent = averageOf(currentCounterUtil);
+  const avgUtilPrev = averageOf(prevCounterUtil);
+  const utilChange = pctChange(avgUtilCurrent, avgUtilPrev);
+  const counterList = Array.from(currentCounterUtil.keys());
+
+  // Hourly volume bars
+  const dataHours = Array.from(hourCounts.keys());
+  const firstHour = dataHours.length ? Math.min(OPEN_HOUR, ...dataHours) : OPEN_HOUR;
+  const lastHour = dataHours.length ? Math.max(CLOSE_HOUR, ...dataHours) : CLOSE_HOUR;
+  const hourlyBars: { hour: number; count: number }[] = [];
+  for (let h = firstHour; h <= lastHour; h++) {
+    hourlyBars.push({ hour: h, count: hourCounts.get(h) || 0 });
+  }
+  const maxHourly = hourlyBars.reduce((m, b) => Math.max(m, b.count), 0);
+
+  // Wait time trend - always the last 7 days regardless of the filter
+  const trendStart = startOfDay(addDays(now, -6));
+  const trendEnd = new Date(now.getTime() + 86400000);
+  const trendRows = enriched.filter(r => inWindow(r.calledMs, trendStart, trendEnd));
+  const trendWaits = justWaits(trendRows);
+  const trendMin = trendWaits.length ? Math.min(...trendWaits) : null;
+  const trendMax = trendWaits.length ? Math.max(...trendWaits) : null;
+  const trendAvg = mean(trendWaits);
+  const trendBuckets: number[][] = Array.from({ length: 7 }, () => []);
+  trendRows.forEach(r => {
+    if (r.calledMs === null || r.waitMs === null) return;
+    const dayIndex = Math.floor(
+      (startOfDay(new Date(r.calledMs)).getTime() - trendStart.getTime()) / 86400000
+    );
+    if (dayIndex >= 0 && dayIndex < 7) trendBuckets[dayIndex].push(r.waitMs);
+  });
+  const trendPoints = trendBuckets
+    .map((vals, day) => ({ day, avg: mean(vals) }))
+    .filter((p): p is { day: number; avg: number } => p.avg !== null);
+  const maxTrend = trendPoints.length ? Math.max(...trendPoints.map(p => p.avg)) : 0;
+  const trendCoords = trendPoints.map(p => ({
+    ...p,
+    x: trendPoints.length === 1 ? 200 : (p.day / 6) * 400,
+    y: maxTrend > 0 ? 140 - (p.avg / maxTrend) * 120 : 75,
+  }));
+  const trendPath = trendCoords.length >= 2
+    ? trendCoords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')
+    : '';
+  const trendArea = trendCoords.length >= 2
+    ? `${trendPath} L${trendCoords[trendCoords.length - 1].x.toFixed(1)},150 L${trendCoords[0].x.toFixed(1)},150 Z`
+    : '';
+
+  // Service distribution
+  const serviceCounts = new Map<string, number>();
+  periodRows.forEach(r => {
+    const name = r.service_name || 'Unspecified';
+    serviceCounts.set(name, (serviceCounts.get(name) || 0) + 1);
+  });
+  const serviceTotal = periodRows.length;
+  const servicePalette = ['#0A1F44', '#755b00', '#fed977', '#e2e2e2', '#4c5e86', '#b4c6f4'];
+  const serviceDist = Array.from(serviceCounts.entries())
+    .map(([name, count]) => ({
+      name,
+      count,
+      percent: serviceTotal ? (count / serviceTotal) * 100 : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .map((s, i) => ({ ...s, color: servicePalette[i % servicePalette.length] }));
+  let cumulative = 0;
+  const donutSegments = serviceDist.map(s => {
+    const start = cumulative;
+    cumulative += s.percent;
+    return `${s.color} ${start}% ${cumulative}%`;
+  });
+  const donutBackground = donutSegments.length
+    ? `conic-gradient(${donutSegments.join(', ')})`
+    : 'conic-gradient(#e2e2e2 0% 100%)';
+
+  // Performance summary rows, one per real service name
+  const summary = serviceDist.map(s => {
+    const forService = periodRows.filter(r => (r.service_name || 'Unspecified') === s.name);
+    const avgWaitMs = mean(forService.map(r => r.waitMs).filter((v): v is number => v !== null));
+    const avgServiceMs = mean(forService.map(r => r.serviceMs).filter((v): v is number => v !== null));
+    const avgWaitMin = avgWaitMs !== null ? avgWaitMs / 60000 : null;
+    let sla = 'NO DATA';
+    if (avgWaitMin !== null) {
+      if (avgWaitMin <= SLA_EXCELLENT_MIN) sla = 'EXCELLENT';
+      else if (avgWaitMin <= SLA_HEALTHY_MIN) sla = 'HEALTHY';
+      else sla = 'ATTENTION';
+    }
+    return { service: s.name, tickets: forService.length, avgWaitMs, avgServiceMs, sla };
+  });
+
+  const changeBadge = (change: number | null, increaseIsGood: boolean) => {
+    if (change === null || !Number.isFinite(change)) return null;
+    const up = change > 0;
+    const down = change < 0;
+    const good = increaseIsGood ? up : down;
+    const cls = !up && !down
+      ? 'text-on-surface-variant bg-surface-container'
+      : good
+        ? 'text-green-700 bg-green-50'
+        : 'text-red-700 bg-red-50';
+    return (
+      <div className={`flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold ${cls}`}>
+        {up && <TrendingUp className="w-3.5 h-3.5 mr-1" />}
+        {down && <TrendingDown className="w-3.5 h-3.5 mr-1" />}
+        <span>{Math.abs(change).toFixed(1)}%</span>
+      </div>
+    );
+  };
+
+  const slaBadge = (sla: string) => {
+    if (sla === 'EXCELLENT') {
+      return (
+        <span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-full font-bold uppercase tracking-wider text-[9px] border border-green-300">
+          Excellent
+        </span>
+      );
+    }
+    if (sla === 'HEALTHY') {
+      return (
+        <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full font-bold uppercase tracking-wider text-[9px] border border-green-200">
+          Healthy
+        </span>
+      );
+    }
+    if (sla === 'ATTENTION') {
+      return (
+        <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full font-bold uppercase tracking-wider text-[9px] border border-red-200">
+          Attention
+        </span>
+      );
+    }
+    return (
+      <span className="px-2.5 py-1 bg-surface-container text-outline rounded-full font-bold uppercase tracking-wider text-[9px] border border-outline-variant/40">
+        No Data
+      </span>
+    );
+  };
 
   const handleExport = () => {
-    setExportToast('Performance report successfully exported as CSV!');
-    setTimeout(() => {
-      setExportToast(null);
-    }, 4000);
+    const header = ['Service Category', 'Tickets Issued', 'Avg Wait', 'Avg Service', 'SLA Status'];
+    const lines = [header.join(',')];
+    summary.forEach(row => {
+      const cols = [
+        row.service,
+        String(row.tickets),
+        formatMmSsOrDash(row.avgWaitMs),
+        formatMmSsOrDash(row.avgServiceMs),
+        row.sla,
+      ];
+      lines.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `smartq-performance-${timeFilter}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setExportToast('Performance summary exported as CSV.');
+    setTimeout(() => setExportToast(null), 3000);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex">
+        <AdminSidebar activeItem="analytics" />
+        <div className="flex-grow">
+          <AdminLayout
+            title="Analytics Dashboard"
+            description="Live insight monitor of ticket volumes, counter operations, and average branch wait durations."
+          >
+            <div className="py-20 text-center">
+              <p className="text-sm text-on-surface-variant font-medium animate-pulse">Loading analytics…</p>
+            </div>
+          </AdminLayout>
+        </div>
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex">
+        <AdminSidebar activeItem="analytics" />
+        <div className="flex-grow">
+          <AdminLayout
+            title="Analytics Dashboard"
+            description="Live insight monitor of ticket volumes, counter operations, and average branch wait durations."
+          >
+            <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-16 text-center">
+              <p className="text-sm font-bold text-primary">No queue activity yet</p>
+              <p className="text-xs text-on-surface-variant font-medium mt-1">
+                There is no ticket data for the selected period.
+              </p>
+            </div>
+          </AdminLayout>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex">
@@ -497,12 +870,12 @@ export function AnalyticsScreen() {
       <div className="flex-grow">
         <AdminLayout 
           title="Analytics Dashboard" 
-          description="Real-time insight monitor of kiosk interactions, transaction volumes, counter operations, and average branch wait durations."
+          description="Live insight monitor of ticket volumes, counter operations, and average branch wait durations."
         >
           {/* Custom Sub-Header with filter buttons */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-outline-variant/30 mb-6">
             <div>
-              <span className="text-[10px] text-secondary font-bold tracking-widest uppercase">STITCH TELEMETRY SYSTEM</span>
+              <span className="text-[10px] text-secondary font-bold tracking-widest uppercase">BRANCH TELEMETRY</span>
               <h3 className="text-xl font-extrabold text-primary">In-depth Throughput Monitor</h3>
             </div>
             
@@ -550,66 +923,59 @@ export function AnalyticsScreen() {
 
           {/* Row 1: KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* KPI 1 */}
+            {/* KPI 1: Customers Served */}
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-secondary-fixed/50 rounded-xl">
                   <Users className="w-5 h-5 text-secondary" />
                 </div>
-                <div className="flex items-center text-green-700 bg-green-50 px-2.5 py-1 rounded-lg text-[10px] font-bold">
-                  <TrendingUp className="w-3.5 h-3.5 mr-1" />
-                  <span>{activeMetrics.served.change}</span>
-                </div>
+                {changeBadge(servedChange, true)}
               </div>
               <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Customers Served</h4>
-              <p className="text-3xl font-black text-primary mt-1">{activeMetrics.served.count}</p>
+              <p className="text-3xl font-black text-primary mt-1">{servedCurrent.toLocaleString()}</p>
             </div>
 
-            {/* KPI 2 */}
+            {/* KPI 2: Avg Wait Time */}
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-primary-fixed rounded-xl">
                   <Clock className="w-5 h-5 text-[#041a3f]" />
                 </div>
-                <div className="flex items-center text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg text-[10px] font-bold">
-                  <TrendingUp className="w-3.5 h-3.5 mr-1" />
-                  <span>{activeMetrics.wait.change}</span>
-                </div>
+                {changeBadge(waitChange, false)}
               </div>
               <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Avg Wait Time</h4>
               <p className="text-3xl font-black text-primary mt-1">
-                {activeMetrics.wait.duration}
-                <span className="text-xs font-semibold text-on-surface-variant ml-1">{activeMetrics.wait.text}</span>
+                {waitCurrent !== null ? formatMmSs(waitCurrent) : '--:--'}
+                <span className="text-xs font-semibold text-on-surface-variant ml-1">min</span>
               </p>
             </div>
 
-            {/* KPI 3 */}
+            {/* KPI 3: Peak Hour */}
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-surface-container rounded-xl">
                   <TrendingUp className="w-5 h-5 text-on-surface" />
                 </div>
-                <div className="flex items-center text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-lg text-[10px] font-bold">
-                  <span>Stable</span>
-                </div>
+                {peakHour !== null && (
+                  <div className="flex items-center text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-lg text-[10px] font-bold">
+                    <span>{peakCount} tickets</span>
+                  </div>
+                )}
               </div>
               <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Peak Hour</h4>
-              <p className="text-3xl font-black text-primary mt-1">{activeMetrics.peak.val}</p>
+              <p className="text-3xl font-black text-primary mt-1">{peakHour !== null ? formatHourLabel(peakHour) : '—'}</p>
             </div>
 
-            {/* KPI 4 */}
+            {/* KPI 4: Counter Utilisation */}
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-secondary-container rounded-xl">
                   <Sliders className="w-5 h-5 text-on-secondary-container" />
                 </div>
-                <div className="flex items-center text-green-700 bg-green-50 px-2.5 py-1 rounded-lg text-[10px] font-bold">
-                  <TrendingUp className="w-3.5 h-3.5 mr-1" />
-                  <span>{activeMetrics.util.change}</span>
-                </div>
+                {changeBadge(utilChange, true)}
               </div>
               <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Counter Utilisation</h4>
-              <p className="text-3xl font-black text-primary mt-1">{activeMetrics.util.val}</p>
+              <p className="text-3xl font-black text-primary mt-1">{avgUtilCurrent !== null ? `${avgUtilCurrent.toFixed(1)}%` : '—'}</p>
             </div>
           </div>
 
@@ -620,20 +986,20 @@ export function AnalyticsScreen() {
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h3 className="text-base font-extrabold text-primary">Hourly Customer Volume</h3>
-                  <p className="text-xs text-on-surface-variant mt-0.5 font-medium">Kiosk interaction logs by operational time frames</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5 font-medium">Tickets issued by hour</p>
                 </div>
-                <span className="text-[10px] tracking-wider uppercase bg-[#fed977]/30 text-[#755b00] px-3 py-1 rounded-full font-extrabold">Kiosk Log</span>
+                <span className="text-[10px] tracking-wider uppercase bg-[#fed977]/30 text-[#755b00] px-3 py-1 rounded-full font-extrabold">Live Data</span>
               </div>
 
               <div className="h-[220px] flex items-end justify-between gap-1.5 px-2 relative pt-6">
-                {activeHourly.map((val, idx) => {
-                  const percentHeight = `${(val / maxHourly) * 100}%`;
-                  const isPeak = idx === 3 || idx === 4; // 11:00 AM and 12:00 PM
+                {hourlyBars.map((bar) => {
+                  const percentHeight = maxHourly > 0 ? `${(bar.count / maxHourly) * 100}%` : '0%';
+                  const isPeak = peakHour !== null && bar.hour === peakHour;
                   return (
                     <div 
-                      key={idx}
+                      key={bar.hour}
                       className="flex-grow flex flex-col items-center group relative cursor-pointer"
-                      onMouseEnter={() => setHoveredBar(idx)}
+                      onMouseEnter={() => setHoveredBar(bar.hour)}
                       onMouseLeave={() => setHoveredBar(null)}
                     >
                       {/* Bar fill */}
@@ -647,7 +1013,7 @@ export function AnalyticsScreen() {
                       >
                         {/* Tooltip bubble */}
                         <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#00081e] text-white text-[10px] px-2.5 py-1 rounded-lg shadow-md pointer-events-none transition-opacity duration-200 opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 font-bold font-mono">
-                          {val} clients
+                          {bar.count} tickets
                         </div>
                       </div>
                     </div>
@@ -656,12 +1022,11 @@ export function AnalyticsScreen() {
               </div>
 
               <div className="flex justify-between mt-4 text-[10px] text-on-surface-variant font-extrabold border-t border-outline-variant/10 pt-2 font-mono">
-                <span>08:00</span>
-                <span>10:00</span>
-                <span>12:00</span>
-                <span>14:00</span>
-                <span>16:00</span>
-                <span>18:00</span>
+                {hourlyBars.map((bar) => (
+                  <span key={bar.hour} className="flex-grow text-center">
+                    {`${String(bar.hour).padStart(2, '0')}:00`}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -673,47 +1038,55 @@ export function AnalyticsScreen() {
                     <h3 className="text-base font-extrabold text-white">Wait Time Trend (7D)</h3>
                     <span className="w-2.5 h-2.5 bg-[#fed977] rounded-full animate-pulse"></span>
                   </div>
-                  <p className="text-blue-100/60 text-xs mb-6 font-medium">Average wait duration across all sub-channels</p>
+                  <p className="text-blue-100/60 text-xs mb-6 font-medium">Average wait duration across the last 7 days</p>
                 </div>
 
                 <div className="h-[140px] relative mt-2">
-                  <svg className="w-full h-full" viewBox="0 0 400 150" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#fed977" stopOpacity="0.4" />
-                        <stop offset="100%" stopColor="#fed977" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path 
-                      d="M 0 110 Q 50 90 100 120 T 200 60 T 300 80 T 400 30 L 400 150 L 0 150 Z" 
-                      fill="url(#chartGrad)" 
-                    />
-                    <path 
-                      d="M0,110 Q50,90 100,120 T200,60 T300,80 T400,30" 
-                      fill="none" 
-                      stroke="#fed977" 
-                      strokeLinecap="round" 
-                      strokeWidth="3.5" 
-                    />
-                    <circle cx="100" cy="120" fill="#fed977" r="4" />
-                    <circle cx="200" cy="60" fill="#fed977" r="4" />
-                    <circle cx="300" cy="80" fill="#fed977" r="4" />
-                    <circle cx="400" cy="30" fill="#fed977" r="6" className="animate-pulse" />
-                  </svg>
+                  {trendCoords.length >= 2 ? (
+                    <svg className="w-full h-full" viewBox="0 0 400 150" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#fed977" stopOpacity="0.4" />
+                          <stop offset="100%" stopColor="#fed977" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {trendArea && <path d={trendArea} fill="url(#chartGrad)" />}
+                      <path 
+                        d={trendPath} 
+                        fill="none" 
+                        stroke="#fed977" 
+                        strokeLinecap="round" 
+                        strokeWidth="3.5" 
+                      />
+                      {trendCoords.map((c, i) => (
+                        <circle
+                          key={i}
+                          cx={c.x}
+                          cy={c.y}
+                          fill="#fed977"
+                          r={i === trendCoords.length - 1 ? 6 : 4}
+                        />
+                      ))}
+                    </svg>
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-blue-100/60 text-xs font-semibold">Not enough data yet</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 flex justify-between items-center border-t border-white/5 pt-4">
                   <div className="text-center">
                     <span className="block text-[#ffe08f] text-[9px] uppercase tracking-wider font-extrabold">Min</span>
-                    <span className="text-white font-bold text-xs font-mono">04:12</span>
+                    <span className="text-white font-bold text-xs font-mono">{formatMmSsOrDash(trendMin)}</span>
                   </div>
                   <div className="text-center border-x border-white/10 px-8">
                     <span className="block text-[#ffe08f] text-[9px] uppercase tracking-wider font-extrabold">Avg</span>
-                    <span className="text-white font-bold text-xs font-mono">08:42</span>
+                    <span className="text-white font-bold text-xs font-mono">{formatMmSsOrDash(trendAvg)}</span>
                   </div>
                   <div className="text-center">
                     <span className="block text-[#ffe08f] text-[9px] uppercase tracking-wider font-extrabold">Max</span>
-                    <span className="text-white font-bold text-xs font-mono">18:55</span>
+                    <span className="text-white font-bold text-xs font-mono">{formatMmSsOrDash(trendMax)}</span>
                   </div>
                 </div>
               </div>
@@ -731,95 +1104,91 @@ export function AnalyticsScreen() {
                 <div className="relative w-36 h-36 shrink-0 shadow-inner">
                   <div 
                     className="w-full h-full rounded-full" 
-                    style={{ background: 'conic-gradient(#0A1F44 0% 45%, #755b00 45% 75%, #fed977 75% 90%, #e2e2e2 90% 100%)' }}
+                    style={{ background: donutBackground }}
                   />
                   <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center text-center">
                     <span className="text-[10px] text-on-surface-variant uppercase font-extrabold tracking-wider">Total</span>
-                    <span className="text-sm font-bold text-primary font-mono">
-                      {timeFilter === 'today' ? '1.2k' : timeFilter === 'week' ? '8.4k' : '34.2k'}
-                    </span>
+                    <span className="text-sm font-bold text-primary font-mono">{formatCompact(serviceTotal)}</span>
                   </div>
                 </div>
 
                 <div className="flex-grow w-full space-y-3 font-semibold text-xs text-on-surface-variant">
-                  <div className="flex items-center justify-between p-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#0A1F44]"></span>
-                      <span>General Banking</span>
-                    </div>
-                    <span className="font-mono text-primary font-extrabold">45%</span>
-                  </div>
-                  <div className="flex items-center justify-between p-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#755b00]"></span>
-                      <span>Teller Services</span>
-                    </div>
-                    <span className="font-mono text-primary font-extrabold">30%</span>
-                  </div>
-                  <div className="flex items-center justify-between p-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fed977]"></span>
-                      <span>Account Opening</span>
-                    </div>
-                    <span className="font-mono text-primary font-extrabold">15%</span>
-                  </div>
-                  <div className="flex items-center justify-between p-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-outline-variant"></span>
-                      <span>Loans/Credit</span>
-                    </div>
-                    <span className="font-mono text-primary font-extrabold">10%</span>
-                  </div>
+                  {serviceDist.length > 0 ? (
+                    serviceDist.map((s) => (
+                      <div key={s.name} className="flex items-center justify-between p-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }}></span>
+                          <span className="truncate">{s.name}</span>
+                        </div>
+                        <span className="font-mono text-primary font-extrabold">{s.percent.toFixed(0)}%</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-outline font-semibold">No service data yet.</p>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Counter efficiency */}
+            {/* Counter efficiency */}
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6 flex flex-col justify-between">
               <h3 className="text-base font-extrabold text-primary mb-6">Counter Efficiency</h3>
               
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold font-mono">
-                    <span className="text-on-surface-variant font-semibold">Counter 01 (General)</span>
-                    <span className="text-primary font-extrabold">98%</span>
-                  </div>
-                  <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div className="h-full bg-secondary w-[98%] rounded-full" />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold font-mono">
-                    <span className="text-on-surface-variant font-semibold">Counter 02 (Premium)</span>
-                    <span className="text-primary font-extrabold">82%</span>
-                  </div>
-                  <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div className="h-full bg-primary w-[82%] rounded-full" />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold font-mono">
-                    <span className="text-on-surface-variant font-semibold">Counter 03 (Teller)</span>
-                    <span className="text-primary font-extrabold">95%</span>
-                  </div>
-                  <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div className="h-full bg-secondary w-[95%] rounded-full" />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold font-mono">
-                    <span className="text-on-surface-variant font-semibold">Counter 04 (Special)</span>
-                    <span className="text-primary font-extrabold">64%</span>
-                  </div>
-                  <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div className="h-full bg-outline-variant/65 w-[64%] rounded-full" />
-                  </div>
-                </div>
+                {counterList.length > 0 ? (
+                  counterList.map((counter) => {
+                    const util = currentCounterUtil.get(counter) ?? 0;
+                    return (
+                      <div key={counter} className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold font-mono">
+                          <span className="text-on-surface-variant font-semibold">{counter}</span>
+                          <span className="text-primary font-extrabold">{util.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                          <div className="h-full bg-secondary rounded-full transition-all duration-500" style={{ width: `${util}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-outline font-semibold">No counter activity yet.</p>
+                )}
               </div>
             </div>
+          </div>
+
+          {/* Row 3.5: Prediction Accuracy for the selected period */}
+          <div className="mb-8 text-on-surface">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-extrabold text-primary">Prediction Accuracy</h3>
+              <span className="text-[10px] tracking-wider uppercase bg-[#fed977]/30 text-[#755b00] px-3 py-1 rounded-full font-extrabold">
+                Selected period
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
+                <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Tickets Evaluated</h4>
+                <p className="text-3xl font-black text-primary mt-1">{predictionStats ? predictionStats.evaluated : '—'}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
+                <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Accurate (%)</h4>
+                <p className="text-3xl font-black text-primary mt-1">{predictionStats ? `${predictionStats.accuratePct}%` : '—'}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all p-6">
+                <h4 className="text-on-surface-variant text-[11px] uppercase tracking-wider font-extrabold">Mean Error (min)</h4>
+                <p className="text-3xl font-black text-primary mt-1">{predictionStats ? predictionStats.meanError : '—'}</p>
+              </div>
+            </div>
+            <p className="text-xs text-on-surface-variant font-medium mt-3">
+              {predictionStats === null
+                ? 'Not enough completed tickets yet.'
+                : Math.abs(predictionStats.signedError) <= 1
+                  ? 'Predictions are on target on average.'
+                  : predictionStats.signedError > 0
+                    ? `Predictions are running about ${Math.abs(predictionStats.signedError).toFixed(1)} min too low.`
+                    : `Predictions are running about ${Math.abs(predictionStats.signedError).toFixed(1)} min too high.`}
+            </p>
           </div>
 
           {/* Row 4: Performance Summary Table */}
@@ -827,7 +1196,7 @@ export function AnalyticsScreen() {
             <div className="p-6 pb-4 flex justify-between items-center border-b border-outline-variant/10">
               <div>
                 <h3 className="text-base font-extrabold text-primary">Performance Summary by Service Type</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5 font-medium">Service level agreement indexes and real-time ratings</p>
+                <p className="text-xs text-on-surface-variant mt-0.5 font-medium">Service level agreement indexes for the selected period</p>
               </div>
               <button 
                 onClick={handleExport}
@@ -847,70 +1216,29 @@ export function AnalyticsScreen() {
                     <th className="px-6 py-4">Avg Wait</th>
                     <th className="px-6 py-4">Avg Service</th>
                     <th className="px-6 py-4">SLA Status</th>
-                    <th className="px-6 py-4">Rating</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/30 font-semibold text-on-surface-variant">
-                  <tr className="hover:bg-surface-container/20 transition-colors bg-white">
-                    <td className="px-6 py-4 font-bold text-primary">General Inquiries</td>
-                    <td className="px-6 py-4 font-mono font-bold">452</td>
-                    <td className="px-6 py-4 font-mono">12:05m</td>
-                    <td className="px-6 py-4 font-mono">05:30m</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full font-bold uppercase tracking-wider text-[9px] border border-green-200">
-                        Healthy
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex text-secondary-container gap-0.5">
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 text-outline-variant fill-[#e2e2e2] stroke-outline-variant" />
-                      </div>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-surface-container/20 transition-colors bg-surface-container/5">
-                    <td className="px-6 py-4 font-bold text-primary">Priority Banking</td>
-                    <td className="px-6 py-4 font-mono font-bold">128</td>
-                    <td className="px-6 py-4 font-mono">02:30m</td>
-                    <td className="px-6 py-4 font-mono">15:45m</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-full font-bold uppercase tracking-wider text-[9px] border border-green-300">
-                        Excellent
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex text-secondary-container gap-0.5">
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                      </div>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-surface-container/20 transition-colors bg-white">
-                    <td className="px-6 py-4 font-bold text-primary">Foreign Exchange</td>
-                    <td className="px-6 py-4 font-mono font-bold">84</td>
-                    <td className="px-6 py-4 font-mono">18:40m</td>
-                    <td className="px-6 py-4 font-mono">08:20m</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full font-bold uppercase tracking-wider text-[9px] border border-red-200">
-                        Attention
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex text-[#fed977] gap-0.5">
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 fill-[#fed977] stroke-secondary" />
-                        <Star className="w-3.5 h-3.5 text-outline-variant fill-[#e2e2e2] stroke-outline-variant" />
-                        <Star className="w-3.5 h-3.5 text-outline-variant fill-[#e2e2e2] stroke-outline-variant" />
-                      </div>
-                    </td>
-                  </tr>
+                  {summary.length > 0 ? (
+                    summary.map((row, idx) => (
+                      <tr
+                        key={row.service}
+                        className={idx % 2 === 0 ? 'hover:bg-surface-container/20 transition-colors bg-white' : 'hover:bg-surface-container/20 transition-colors bg-surface-container/5'}
+                      >
+                        <td className="px-6 py-4 font-bold text-primary">{row.service}</td>
+                        <td className="px-6 py-4 font-mono font-bold">{row.tickets}</td>
+                        <td className="px-6 py-4 font-mono">{formatMmSsOrDash(row.avgWaitMs)}</td>
+                        <td className="px-6 py-4 font-mono">{formatMmSsOrDash(row.avgServiceMs)}</td>
+                        <td className="px-6 py-4">{slaBadge(row.sla)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-outline font-semibold">
+                        No service performance data yet.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -922,13 +1250,209 @@ export function AnalyticsScreen() {
 }
 
 // Screen 2: Reports
-interface SavedReport {
-  id: string;
-  name: string;
-  author: string;
-  createdOn: string;
-  type: 'Efficiency' | 'Audit' | 'Traffic' | 'SLA' | 'Prediction';
-  status: 'Ready' | 'Archived' | 'Generating';
+interface ReportQueueRow {
+  service_name: string | null;
+  status: string;
+  counter_id: string | null;
+  created_at: string;
+  called_at: string | null;
+  completed_at: string | null;
+}
+
+interface ReportResult {
+  columns: string[];
+  rows: (string | number)[][];
+  periodLabel: string;
+  totalTickets: number;
+}
+
+const REPORT_PAGE_SIZE = 1000;
+const REPORT_OPEN_HOUR = 8;
+const REPORT_CLOSE_HOUR = 18;
+
+function reportStartOfDay(offsetDays = 0): Date {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() + offsetDays);
+  return d;
+}
+
+function reportHourLabel(h: number): string {
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display}${suffix}`;
+}
+
+function formatWaitMs(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function reportDayLabel(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function resolveReportPeriod(
+  dateRange: string,
+  customFrom: string,
+  customTo: string
+): { start: Date; end: Date; label: string } | null {
+  const now = new Date();
+  const endToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  if (dateRange === 'Last 7 Days') {
+    const start = reportStartOfDay(-6);
+    return { start, end: endToday, label: `Last 7 days (${reportDayLabel(start)} – ${reportDayLabel(endToday)})` };
+  }
+  if (dateRange === 'Current Month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { start, end: endToday, label: `Current month (${start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})` };
+  }
+  if (dateRange === 'Last Quarter') {
+    const start = reportStartOfDay(-89);
+    return { start, end: endToday, label: `Last quarter (${reportDayLabel(start)} – ${reportDayLabel(endToday)})` };
+  }
+  // Custom Range
+  if (!customFrom || !customTo) return null;
+  const from = new Date(`${customFrom}T00:00:00`);
+  const to = new Date(`${customTo}T23:59:59.999`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) return null;
+  return { start: from, end: to, label: `Custom range (${reportDayLabel(from)} – ${reportDayLabel(to)})` };
+}
+
+async function fetchReportRows(
+  start: Date,
+  end: Date,
+  serviceFilter: string,
+  counterFilter: string
+): Promise<ReportQueueRow[]> {
+  const rows: ReportQueueRow[] = [];
+  let from = 0;
+  for (;;) {
+    let query = supabase
+      .from('queues')
+      .select('service_name, status, counter_id, created_at, called_at, completed_at')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
+    if (serviceFilter !== 'All Services') query = query.eq('service_name', serviceFilter);
+    if (counterFilter !== 'All Counters') query = query.eq('counter_id', counterFilter);
+    const { data, error } = await query
+      .order('created_at', { ascending: true })
+      .range(from, from + REPORT_PAGE_SIZE - 1);
+    if (error) {
+      console.error('Failed to load report data:', error.message);
+      throw new Error(error.message);
+    }
+    const batch = (data ?? []) as ReportQueueRow[];
+    rows.push(...batch);
+    if (batch.length < REPORT_PAGE_SIZE) break;
+    from += REPORT_PAGE_SIZE;
+  }
+  return rows;
+}
+
+function computeReport(
+  type: string,
+  rows: ReportQueueRow[],
+  period: { start: Date; end: Date }
+): { columns: string[]; rows: (string | number)[][] } {
+  const waitOf = (r: ReportQueueRow): number | null =>
+    r.called_at ? new Date(r.called_at).getTime() - new Date(r.created_at).getTime() : null;
+  const serviceTimeOf = (r: ReportQueueRow): number | null =>
+    r.called_at && r.completed_at
+      ? new Date(r.completed_at).getTime() - new Date(r.called_at).getTime()
+      : null;
+  const avg = (vals: number[]): number | null => (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null);
+
+  if (type === 'Service Efficiency') {
+    const groups = new Map<string, ReportQueueRow[]>();
+    for (const r of rows) {
+      const key = r.service_name || 'Unknown service';
+      const list = groups.get(key) ?? [];
+      list.push(r);
+      groups.set(key, list);
+    }
+    const table: (string | number)[][] = [];
+    for (const [name, list] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const completed = list.filter(r => r.status === 'completed').length;
+      const noShow = list.filter(r => r.status === 'no_show').length;
+      const waits = list.map(waitOf).filter((v): v is number => v !== null);
+      const times = list.map(serviceTimeOf).filter((v): v is number => v !== null);
+      table.push([
+        name,
+        list.length,
+        completed,
+        list.length ? Math.round((noShow / list.length) * 1000) / 10 : 0,
+        avg(waits) !== null ? formatWaitMs(avg(waits) as number) : '—',
+        avg(times) !== null ? formatWaitMs(avg(times) as number) : '—'
+      ]);
+    }
+    return { columns: ['Service', 'Tickets Issued', 'Completed', 'No-Show %', 'Avg Wait', 'Avg Service Time'], rows: table };
+  }
+
+  if (type === 'Counter Performance') {
+    const groups = new Map<string, ReportQueueRow[]>();
+    for (const r of rows) {
+      if (!r.counter_id) continue;
+      const list = groups.get(r.counter_id) ?? [];
+      list.push(r);
+      groups.set(r.counter_id, list);
+    }
+    const days = Math.max(1, Math.ceil((period.end.getTime() - period.start.getTime()) / 86400000));
+    const availableMs = days * (REPORT_CLOSE_HOUR - REPORT_OPEN_HOUR) * 3600000;
+    const table: (string | number)[][] = [];
+    for (const [name, list] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const completed = list.filter(r => r.status === 'completed').length;
+      const times = list.map(serviceTimeOf).filter((v): v is number => v !== null);
+      const handling = times.reduce((a, b) => a + b, 0);
+      const utilisation = Math.min(100, Math.round((handling / availableMs) * 100));
+      table.push([
+        name,
+        completed,
+        avg(times) !== null ? formatWaitMs(avg(times) as number) : '—',
+        `${utilisation}%`
+      ]);
+    }
+    return { columns: ['Counter', 'Tickets Completed', 'Avg Service Time', 'Utilisation %'], rows: table };
+  }
+
+  if (type === 'Wait Time Analysis') {
+    const groups = new Map<string, ReportQueueRow[]>();
+    for (const r of rows) {
+      const d = new Date(r.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const list = groups.get(key) ?? [];
+      list.push(r);
+      groups.set(key, list);
+    }
+    const table: (string | number)[][] = [];
+    for (const [key, list] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const waits = list.map(waitOf).filter((v): v is number => v !== null);
+      table.push([
+        reportDayLabel(new Date(`${key}T00:00:00`)),
+        list.length,
+        avg(waits) !== null ? formatWaitMs(avg(waits) as number) : '—',
+        waits.length ? formatWaitMs(Math.max(...waits)) : '—'
+      ]);
+    }
+    return { columns: ['Day', 'Tickets', 'Avg Wait', 'Longest Wait'], rows: table };
+  }
+
+  // Peak Hours Trends
+  const groups = new Map<number, ReportQueueRow[]>();
+  for (const r of rows) {
+    const h = new Date(r.created_at).getHours();
+    const list = groups.get(h) ?? [];
+    list.push(r);
+    groups.set(h, list);
+  }
+  const table: (string | number)[][] = [];
+  for (const [h, list] of [...groups.entries()].sort((a, b) => a[0] - b[0])) {
+    const waits = list.map(waitOf).filter((v): v is number => v !== null);
+    table.push([reportHourLabel(h), list.length, avg(waits) !== null ? formatWaitMs(avg(waits) as number) : '—']);
+  }
+  return { columns: ['Hour', 'Tickets', 'Avg Wait'], rows: table };
 }
 
 export function ReportsScreen() {
@@ -939,58 +1463,103 @@ export function ReportsScreen() {
   const [dateRange, setDateRange] = useState<string>('Last 7 Days');
   const [service, setService] = useState<string>('All Services');
   const [counter, setCounter] = useState<string>('All Counters');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+
+  // Real options loaded from the database
+  const [serviceOptions, setServiceOptions] = useState<string[]>([]);
+  const [counterOptions, setCounterOptions] = useState<string[]>([]);
 
   // Interactive UI states
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [exportType, setExportType] = useState<'csv' | 'pdf' | null>(null);
+  const [result, setResult] = useState<ReportResult | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Pagination Simulator
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  // Load filter options from the database
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      const [svc, cnt] = await Promise.all([
+        supabase.from('services').select('name').order('name'),
+        supabase.from('counters').select('name').order('name')
+      ]);
+      if (svc.error) {
+        console.error('Failed to load services:', svc.error.message);
+      } else {
+        setServiceOptions(((svc.data ?? []) as { name: string }[]).map(s => s.name));
+      }
+      if (cnt.error) {
+        console.error('Failed to load counters:', cnt.error.message);
+      } else {
+        setCounterOptions(((cnt.data ?? []) as { name: string }[]).map(c => c.name));
+      }
+    };
+    loadFilterOptions();
+  }, []);
 
-  // Saved reports list state
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([
-    { id: '1', name: 'Monthly Performance_Oct23', author: 'Alex Chen', createdOn: 'Oct 31, 2023 ΓÇó 05:30 PM', type: 'Efficiency', status: 'Ready' },
-    { id: '2', name: 'Q3_Teller_Audit_Internal', author: 'System Automated', createdOn: 'Oct 15, 2023 ΓÇó 09:00 AM', type: 'Audit', status: 'Ready' },
-    { id: '3', name: 'Peak_Traffic_Analysis_W42', author: 'Maria G.', createdOn: 'Oct 12, 2023 ΓÇó 11:20 AM', type: 'Traffic', status: 'Archived' }
-  ]);
-
-  // Handle Generate Report simulation
-  const handleGenerateReport = () => {
+  // Generate a real report from queues data
+  const handleGenerateReport = async () => {
+    const period = resolveReportPeriod(dateRange, customFrom, customTo);
+    if (!period) {
+      triggerToast('Select a valid date range. Custom Range needs both dates.');
+      return;
+    }
     setIsGenerating(true);
-    triggerToast('Initiating predictive calculations and server epoch audits...');
-
-    setTimeout(() => {
-      const typeShort = reportType.split(' ').map(word => word[0]).join('');
-      const dateShort = dateRange.replace(/\s+/g, '');
-      const dynamicName = `${typeShort}_Report_${dateShort}_${Date.now().toString().slice(-4)}`;
-      
-      const newReport: SavedReport = {
-        id: Date.now().toString(),
-        name: dynamicName,
-        author: 'You (Staff Panel)',
-        createdOn: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ΓÇó ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        type: reportType.includes('Efficiency') ? 'Efficiency' : reportType.includes('Audit') || reportType.includes('Performance') ? 'Audit' : 'Traffic',
-        status: 'Ready'
-      };
-
-      setSavedReports(prev => [newReport, ...prev]);
+    try {
+      const rows = await fetchReportRows(period.start, period.end, service, counter);
+      const report = computeReport(reportType, rows, period);
+      setResult({
+        columns: report.columns,
+        rows: report.rows,
+        periodLabel: period.label,
+        totalTickets: rows.length
+      });
+      if (rows.length === 0) {
+        triggerToast('No tickets found for this period.');
+      } else {
+        triggerToast(`Report generated from ${rows.length} ticket${rows.length === 1 ? '' : 's'}.`);
+      }
+    } catch (err) {
+      console.error('Report generation failed:', err);
+      triggerToast('Failed to generate report. Please try again.');
+      setResult(null);
+    } finally {
       setIsGenerating(false);
-      triggerToast(`Successfully generated "${dynamicName}" report!`);
-    }, 1500);
+    }
   };
 
-  // Export Simulations
-  const handleExport = (type: 'csv' | 'pdf') => {
-    setExportType(type);
-    triggerToast(`Compiling structured datasets for ${type.toUpperCase()} extraction...`);
-
-    setTimeout(() => {
-      setExportType(null);
-      triggerToast(`${type.toUpperCase()} sheet download initialized successfully!`);
-    }, 1200);
+  // Real CSV download of the generated report table
+  const handleExportCsv = () => {
+    if (!result) return;
+    const escapeCell = (value: string | number) => {
+      const s = String(value);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [
+      result.columns.map(escapeCell).join(','),
+      ...result.rows.map(row => row.map(escapeCell).join(','))
+    ].join('\r\n');
+    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    link.href = url;
+    link.download = `smartq-${reportType.toLowerCase().replace(/\s+/g, '-')}-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    triggerToast('CSV export downloaded.');
   };
+
+  // PDF export: print only the report area
+  const handleExportPdf = () => {
+    if (!result) return;
+    window.print();
+  };
+
+  // Clear a stale result whenever the filters change
+  const clearResult = () => setResult(null);
 
   // Helper to trigger floating toast
   const triggerToast = (msg: string) => {
@@ -1006,59 +1575,24 @@ export function ReportsScreen() {
     }
   }, [toastMessage]);
 
-  // Delete/Archive Action
-  const handleArchiveToggle = (id: string) => {
-    setSavedReports(prev => prev.map(rep => {
-      if (rep.id === id) {
-        const nextStatus = rep.status === 'Ready' ? 'Archived' : 'Ready';
-        triggerToast(`Report "${rep.name}" has been ${nextStatus === 'Ready' ? 'restored' : 'archived'}.`);
-        return { ...rep, status: nextStatus };
-      }
-      return rep;
-    }));
-  };
-
-  // Filter logic
-  const filteredReports = savedReports.filter(rep => {
-    const query = searchQuery.toLowerCase();
-    return rep.name.toLowerCase().includes(query) || 
-           rep.author.toLowerCase().includes(query) || 
-           rep.type.toLowerCase().includes(query) || 
-           rep.status.toLowerCase().includes(query);
-  });
-
   return (
     <div className="flex">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #report-print-area, #report-print-area * { visibility: visible !important; }
+          #report-print-area { position: absolute; left: 0; top: 0; width: 100%; background: #ffffff; border: none !important; box-shadow: none !important; }
+        }
+      `}</style>
       <AdminSidebar activeItem="reports" />
       <AdminLayout 
-        title="Financial Intelligence Hub" 
-        description="Analyze teller performance, customer traffic, and service efficiency metrics."
+        title="Reports" 
+        description="Generate service, counter, wait-time and peak-hour reports from live queue data."
       >
         <div className="space-y-8 max-w-6xl w-full pb-10">
-          
-          {/* Header Last Update Row (Stitch-specific element) */}
-          <div className="flex justify-between items-center bg-[#f3f3f3] border border-outline-variant/30 p-4 rounded-xl -mt-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <span className="p-2 bg-white rounded-lg shadow-sm">
-                <LayoutDashboard className="w-4 h-4 text-[#755b00]" />
-              </span>
-              <div>
-                <span className="text-xs font-bold text-primary block leading-none">SmartQ Reporting Terminal</span>
-                <span className="text-[10px] text-on-surface-variant font-medium mt-0.5 block">Audit compliance index verified by Enterprise Cryptographic hash</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#e2e2e2] rounded-lg">
-              <Activity className="w-3.5 h-3.5 text-[#755b00] animate-pulse" />
-              <span className="text-[10px] font-bold text-[#44464e]">Last update: 5 mins ago</span>
-            </div>
-          </div>
 
-          {/* Bento Grid: Report Generator & Efficiency Rating */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-            
-            {/* Report Generator Module (8 cols) */}
-            <section className="xl:col-span-8 bg-white p-6 rounded-xl border border-outline-variant/30 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] flex flex-col gap-6">
+          {/* Report Generator Module */}
+          <section className="bg-white p-6 rounded-xl border border-outline-variant/30 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] flex flex-col gap-6">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-[#fed977]/30 text-[#755b00] rounded-lg flex items-center justify-center shadow-inner">
@@ -1077,12 +1611,12 @@ export function ReportsScreen() {
                   <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">Report Type</label>
                   <select 
                     value={reportType}
-                    onChange={(e) => setReportType(e.target.value)}
+                    onChange={(e) => { setReportType(e.target.value); clearResult(); }}
                     disabled={isGenerating}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
                   >
                     <option>Service Efficiency</option>
-                    <option>Teller Performance</option>
+                    <option>Counter Performance</option>
                     <option>Wait Time Analysis</option>
                     <option>Peak Hours Trends</option>
                   </select>
@@ -1092,7 +1626,7 @@ export function ReportsScreen() {
                   <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">Date Range</label>
                   <select 
                     value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
+                    onChange={(e) => { setDateRange(e.target.value); clearResult(); }}
                     disabled={isGenerating}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
                   >
@@ -1103,18 +1637,43 @@ export function ReportsScreen() {
                   </select>
                 </div>
 
+                {dateRange === 'Custom Range' && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">From</label>
+                      <input
+                        type="date"
+                        value={customFrom}
+                        onChange={(e) => { setCustomFrom(e.target.value); clearResult(); }}
+                        disabled={isGenerating}
+                        className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">To</label>
+                      <input
+                        type="date"
+                        value={customTo}
+                        onChange={(e) => { setCustomTo(e.target.value); clearResult(); }}
+                        disabled={isGenerating}
+                        className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">Service</label>
                   <select 
                     value={service}
-                    onChange={(e) => setService(e.target.value)}
+                    onChange={(e) => { setService(e.target.value); clearResult(); }}
                     disabled={isGenerating}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
                   >
                     <option>All Services</option>
-                    <option>Cash Deposit</option>
-                    <option>Account Opening</option>
-                    <option>Foreign Exchange</option>
+                    {serviceOptions.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1122,14 +1681,14 @@ export function ReportsScreen() {
                   <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider px-0.5">Counter</label>
                   <select 
                     value={counter}
-                    onChange={(e) => setCounter(e.target.value)}
+                    onChange={(e) => { setCounter(e.target.value); clearResult(); }}
                     disabled={isGenerating}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/60 rounded-lg px-3 py-2.5 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 transition-all cursor-pointer"
                   >
                     <option>All Counters</option>
-                    <option>Counter 01 - Cash</option>
-                    <option>Counter 02 - Loans</option>
-                    <option>Counter 03 - Support</option>
+                    {counterOptions.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1159,179 +1718,74 @@ export function ReportsScreen() {
                 </button>
 
                 <button 
-                  onClick={() => handleExport('csv')}
-                  disabled={exportType !== null || isGenerating}
+                  onClick={handleExportCsv}
+                  disabled={!result || isGenerating}
                   className="bg-[#0a1f44] text-white px-6 py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:opacity-95 hover:shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {exportType === 'csv' ? (
-                    <>
-                      <motion.span 
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                      />
-                      <span>Exporting CSV...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-4 h-4" />
-                      <span>Export CSV</span>
-                    </>
-                  )}
+                  <FileText className="w-4 h-4" />
+                  <span>Export CSV</span>
                 </button>
 
                 <button 
-                  onClick={() => handleExport('pdf')}
-                  disabled={exportType !== null || isGenerating}
+                  onClick={handleExportPdf}
+                  disabled={!result || isGenerating}
                   className="text-primary hover:bg-slate-100 border border-outline-variant/65 px-6 py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {exportType === 'pdf' ? (
-                    <>
-                      <motion.span 
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full"
-                      />
-                      <span>Exporting PDF...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      <span>Export PDF</span>
-                    </>
-                  )}
+                  <Download className="w-4 h-4" />
+                  <span>Export PDF</span>
                 </button>
               </div>
             </section>
 
-            {/* Quick Efficiency Meter Insight Column (4 cols) */}
-            <section className="xl:col-span-4 bg-[#0a1f44] p-6 rounded-xl text-white flex flex-col justify-between shadow-md relative overflow-hidden group">
-              <div className="relative z-10 space-y-4">
-                <span className="bg-[#fed977] text-[#241a00] text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded shadow-sm">
-                  Quick Stat
-                </span>
-                
-                <div>
-                  <h4 className="text-[11px] text-blue-100/70 font-bold uppercase tracking-widest leading-none">Branch Performance</h4>
-                  <p className="text-lg font-bold text-[#fed977] mt-1">SLA Efficiency Rating</p>
-                </div>
-
-                <div className="py-2">
-                  <span className="text-4xl font-extrabold font-mono tracking-tight text-white block">94.2%</span>
-                  <span className="text-xs text-green-400 font-semibold block mt-1">Γåæ 2.4% vs last period</span>
-                </div>
-                
-                <p className="text-[11px] text-blue-200/60 leading-relaxed font-semibold">
-                  Predictions are synchronized across 4 unique tellers with actual processing intervals verified.
-                </p>
-              </div>
-
-              {/* Progress visual accent */}
-              <div className="mt-6 flex gap-2 relative z-10">
-                <div className="h-1 bg-[#fed977] rounded-full flex-1"></div>
-                <div className="h-1 bg-[#fed977] rounded-full flex-1"></div>
-                <div className="h-1 bg-[#fed977] rounded-full flex-1"></div>
-                <div className="h-1 bg-slate-500 rounded-full flex-1"></div>
-              </div>
-
-              {/* Blur gradient decoration */}
-              <div className="absolute -bottom-10 -right-10 w-28 h-28 bg-[#fed977]/10 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
-            </section>
-          </div>
-
-          {/* Saved Reports Archive Module (Stitch styling table) */}
-          <section className="bg-white rounded-xl border border-outline-variant/30 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] overflow-hidden">
+          {/* Report Result Area */}
+          <section id="report-print-area" className="bg-white rounded-xl border border-outline-variant/30 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] overflow-hidden">
             
-            {/* Archive Header & Filters */}
+            {/* Result Header */}
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#0a1f44]/5 text-[#0a1f44] rounded-lg flex items-center justify-center shadow-inner">
                   <Database className="w-5 h-5 text-[#0a1f44]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-primary uppercase tracking-wide">Saved Reports Archive</h4>
-                  <p className="text-[11px] text-on-surface-variant font-medium">Browse, retrieve, and delete previous data extractions.</p>
+                  <h4 className="text-sm font-extrabold text-primary uppercase tracking-wide">{reportType}</h4>
+                  <p className="text-[11px] text-on-surface-variant font-medium">
+                    {result
+                      ? `Period: ${result.periodLabel} · ${result.totalTickets} ticket${result.totalTickets === 1 ? '' : 's'}`
+                      : 'Choose filters and generate a report.'}
+                  </p>
                 </div>
-              </div>
-
-              {/* Instant Search Bar */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search archive..."
-                  className="pl-9 pr-4 py-2 bg-[#f3f3f3] border border-outline-variant/60 rounded-full text-xs font-semibold text-primary w-full focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none transition-all placeholder:text-slate-400"
-                />
               </div>
             </div>
 
-            {/* Archive Table */}
+            {/* Report Table */}
             <div className="overflow-x-auto">
-              {filteredReports.length === 0 ? (
-                <div className="p-12 text-center flex flex-col items-center justify-center text-on-surface-variant/70 space-y-3">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center">
-                    <Search className="w-5 h-5 text-slate-300" />
-                  </div>
-                  <p className="text-xs font-bold font-sans">No matching reports found inside local archives.</p>
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Try re-filtering criteria or query string</span>
-                </div>
+              {result === null ? (
+                <p className="p-10 text-center text-xs font-bold text-on-surface-variant">Choose filters and generate a report.</p>
+              ) : result.totalTickets === 0 ? (
+                <p className="p-10 text-center text-xs font-bold text-on-surface-variant">No tickets found for this period.</p>
               ) : (
                 <table className="w-full text-left text-xs border-collapse font-sans">
                   <thead className="bg-[#00081e] text-white">
                     <tr className="uppercase tracking-wider text-[10px] font-bold font-mono">
-                      <th className="px-6 py-4">Report Name</th>
-                      <th className="px-6 py-4">Created On</th>
-                      <th className="px-6 py-4">Type</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
+                      {result.columns.map(col => (
+                        <th key={col} className="px-6 py-4">{col}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10 text-primary font-semibold">
-                    {filteredReports.map((item, index) => (
-                      <tr 
-                        key={item.id} 
+                    {result.rows.map((row, index) => (
+                      <tr
+                        key={index}
                         className={`transition-colors hover:bg-slate-50 duration-150 ${index % 2 === 1 ? 'bg-[#f9f9f9]' : 'bg-white'}`}
                       >
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-xs text-primary">{item.name}</span>
-                            <span className="text-[10px] text-on-surface-variant font-medium">Generated by {item.author}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-on-surface-variant text-[11px] font-mono leading-none font-bold">
-                          {item.createdOn}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="bg-[#f3f3f3] text-on-surface-variant border border-outline-variant/20 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
-                            {item.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="flex items-center gap-1.5 font-bold text-xs text-[#755b00]">
-                            <span className={`w-2 h-2 rounded-full ${item.status === 'Ready' ? 'bg-[#fed977]' : 'bg-slate-400 animate-pulse'}`}></span>
-                            <span>{item.status}</span>
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button 
-                              onClick={() => triggerToast(`Report dataset "${item.name}" download queued.`)}
-                              className="p-1.5 hover:bg-[#fed977]/30 text-[#755b00] rounded-full transition-colors cursor-pointer"
-                              title="Download dataset"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <button 
-                              onClick={() => handleArchiveToggle(item.id)}
-                              className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-full transition-colors cursor-pointer"
-                              title={item.status === 'Ready' ? 'Archive catalog' : 'Restore catalog'}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={cellIndex}
+                            className={`px-6 py-4 ${cellIndex === 0 ? 'font-bold text-primary' : 'font-mono text-on-surface-variant'}`}
+                          >
+                            {cell}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -1339,75 +1793,11 @@ export function ReportsScreen() {
               )}
             </div>
 
-            {/* Pagination Controls */}
-            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
-              <span className="text-xs text-on-surface-variant font-bold leading-none">
-                Showing {filteredReports.length} of {savedReports.length} saved reports
-              </span>
-              
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    setCurrentPage(1);
-                    triggerToast("First page loaded.");
-                  }}
-                  disabled={currentPage === 1}
-                  className="p-1 text-slate-500 hover:text-slate-700 bg-slate-50 rounded border border-outline-variant/40 disabled:opacity-50 shadow-sm cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => {
-                    setCurrentPage(2);
-                    triggerToast("No additional pages stored in current operational logs.");
-                  }}
-                  className="p-1 text-slate-500 hover:text-slate-700 bg-slate-50 rounded border border-outline-variant/40 shadow-sm cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Bottom Decorative Cards (Stitch image mock references) */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            
-            {/* Visual Block 1 */}
-            <div className="rounded-xl overflow-hidden h-48 relative shadow-sm group cursor-pointer border border-outline-variant/20 bg-cover bg-center">
-              <img 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCieGGFiY0xcjed9BHLUnFLEuuR8uDOHEF-vidJv65WcHNVGIpjdFBVBzEJfZYgzg9OZ8m53DtmoPgwmJohO9Vg80FUb1Xr68FwxqpBK3ZYsf1-qarGIjypWnSxSDi-NPsVP8gH6j08gvZkRNn4t7zYsQJvKJI1B8nQ76QNmA1GAK39AQ288WONSZmeiEoHlqPpY805b_M34kc8Q1OPMKqtlNGizay0O54a3xEUqfLAqnOC7-l_Kl_W7w" 
-                alt="Fintech Charts" 
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 pointer-events-none"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#00081e]/90 via-[#00081e]/45 to-transparent flex items-end p-6">
-                <div>
-                  <p className="text-[#fed977] text-[10px] font-extrabold uppercase tracking-widest">Global Insights</p>
-                  <p className="text-white font-bold text-sm mt-0.5">Real-time Network Analytics</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Visual Block 2 */}
-            <div className="rounded-xl overflow-hidden h-48 relative shadow-sm group cursor-pointer border border-outline-variant/20 bg-cover bg-center">
-              <img 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPzHL-sJ4g4ePbuq32h8Q8r_n1inj9uwCpDT9dN6ewPgrS8tZh3xHrknBdVz2c9CaGpZAnzI5rGXZzIotW-6JU0-2rlGk2MeIqJjGDU9BaD4jRUmjmZJ0dT3aRpfckWoDde5Yse0NycktajGDLapa_9i3nZ-zLwKfvQ5m0PI_9mEm_dLFroWXdUE4TdJpktDFVY8c6RbwzHfmeBndsd82I1aABLgUkxuVsxONPu8uJB2MTRUtFuG-apw" 
-                alt="Audit Review" 
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 pointer-events-none"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#00081e]/90 via-[#00081e]/45 to-transparent flex items-end p-6">
-                <div>
-                  <p className="text-[#fed977] text-[10px] font-extrabold uppercase tracking-widest">Compliance</p>
-                  <p className="text-white font-bold text-sm mt-0.5">Regulatory Reporting Framework</p>
-                </div>
-              </div>
-            </div>
           </section>
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Analytics Systems ΓÇó Authorized Access Only
+            SmartQ Analytics Systems — Authorized Access Only
           </footer>
 
         </div>
@@ -1431,32 +1821,25 @@ export function ReportsScreen() {
 }
 
 // Screen 3: Counter Management
-interface Counter {
+interface CounterRow {
   id: string;
   name: string;
-  staffName: string;
-  status: 'Active' | 'Inactive';
+  staff_id: string | null;
+  staff_name: string | null;
+  status: string;
   services: string[];
 }
 
 export function CounterManagementScreen() {
   useAdminSecurity(['admin']);
 
-  // Initial counters list
-  const [counters, setCounters] = useState<Counter[]>([
-    { id: '1', name: 'Counter 01', staffName: 'Robert Harrison', status: 'Active', services: ['Cash Deposit', 'Withdrawal', 'Forex'] },
-    { id: '2', name: 'Counter 02', staffName: 'Sarah Mitchell', status: 'Active', services: ['General Inquiry', 'Loans'] },
-    { id: '3', name: 'Counter 03', staffName: 'Unassigned', status: 'Inactive', services: ['Priority Services'] },
-    { id: '4', name: 'Counter 04', staffName: 'Alex Thompson', status: 'Active', services: ['Mortgage', 'Advisory'] },
-    { id: '5', name: 'Counter 05', staffName: 'Maintenance', status: 'Inactive', services: ['Collections'] },
-    { id: '6', name: 'Counter 06', staffName: 'Maria Garcia', status: 'Active', services: ['Bulk Cash', 'Clearing'] },
-  ]);
+  // Counters (counters table, with staff names resolved from profiles)
+  const [counters, setCounters] = useState<CounterRow[]>([]);
+  const [loadingCounters, setLoadingCounters] = useState<boolean>(true);
 
-  // Notifications Log
-  const [systemLogs, setSystemLogs] = useState<string[]>([
-    'Counter 03 marked as inactive by Supervisor.',
-    'Counter 01 printer low on thermal paper.'
-  ]);
+  // Option lists for the modal
+  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<string[]>([]);
 
   // States
   const [searchQuery, setSearchQuery] = useState('');
@@ -1466,12 +1849,13 @@ export function CounterManagementScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingCounterId, setEditingCounterId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Form Fields
   const [formName, setFormName] = useState('');
-  const [formStaff, setFormStaff] = useState('');
-  const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>('Active');
-  const [formServicesString, setFormServicesString] = useState('');
+  const [formStaffId, setFormStaffId] = useState<string>('');
+  const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
+  const [formServiceNames, setFormServiceNames] = useState<string[]>([]);
 
   // Toast helper
   const triggerToast = (msg: string) => {
@@ -1487,92 +1871,192 @@ export function CounterManagementScreen() {
     }
   }, [toastMessage]);
 
+  // Load all counters with assigned staff names (paginated until a short page).
+  const loadCounters = async () => {
+    setLoadingCounters(true);
+    const rows: Omit<CounterRow, 'staff_name'>[] = [];
+    let from = 0;
+    let failed = false;
+    for (;;) {
+      const { data, error } = await supabase
+        .from('counters')
+        .select('id, name, staff_id, status, services')
+        .order('name')
+        .range(from, from + 999);
+      if (error) {
+        console.error('Failed to load counters:', error.message);
+        failed = true;
+        break;
+      }
+      const batch = (data ?? []) as Omit<CounterRow, 'staff_name'>[];
+      rows.push(...batch);
+      if (batch.length < 1000) break;
+      from += 1000;
+    }
+    if (failed) {
+      setLoadingCounters(false);
+      return;
+    }
+
+    // Resolve assigned staff names from profiles
+    const staffIds = [...new Set(rows.map(r => r.staff_id).filter((v): v is string => !!v))];
+    const nameById = new Map<string, string>();
+    if (staffIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', staffIds);
+      if (profilesError) {
+        console.error('Failed to load assigned staff names:', profilesError.message);
+      } else {
+        for (const p of (profiles ?? []) as { id: string; full_name: string | null; email: string | null }[]) {
+          nameById.set(p.id, p.full_name || (p.email ? p.email.split('@')[0] : ''));
+        }
+      }
+    }
+
+    setCounters(rows.map(r => ({
+      ...r,
+      staff_name: r.staff_id ? (nameById.get(r.staff_id) || null) : null
+    })));
+    setLoadingCounters(false);
+  };
+
+  // Load staff accounts (role='staff') and active service names for the modal
+  const loadOptions = async () => {
+    const staffRows: { id: string; full_name: string | null; email: string | null }[] = [];
+    let staffFrom = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'staff')
+        .order('full_name')
+        .range(staffFrom, staffFrom + 999);
+      if (error) {
+        console.error('Failed to load staff list:', error.message);
+        break;
+      }
+      const batch = (data ?? []) as typeof staffRows;
+      staffRows.push(...batch);
+      if (batch.length < 1000) break;
+      staffFrom += 1000;
+    }
+    setStaffOptions(staffRows.map(p => ({
+      id: p.id,
+      name: p.full_name || (p.email ? p.email.split('@')[0] : 'Staff member')
+    })));
+
+    const serviceNames: string[] = [];
+    let serviceFrom = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from('services')
+        .select('name')
+        .eq('status', 'active')
+        .order('name')
+        .range(serviceFrom, serviceFrom + 999);
+      if (error) {
+        console.error('Failed to load services list:', error.message);
+        break;
+      }
+      const batch = (data ?? []) as { name: string }[];
+      serviceNames.push(...batch.map(s => s.name));
+      if (batch.length < 1000) break;
+      serviceFrom += 1000;
+    }
+    setServiceOptions(serviceNames);
+  };
+
+  useEffect(() => {
+    loadCounters();
+    loadOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Open modal for creating
   const openCreateModal = () => {
     setModalMode('create');
     setEditingCounterId(null);
-    setFormName(`Counter 0${counters.length + 1}`);
-    setFormStaff('');
-    setFormStatus('Active');
-    setFormServicesString('General, Support');
+    setFormName('');
+    setFormStaffId('');
+    setFormStatus('active');
+    setFormServiceNames([]);
     setIsModalOpen(true);
   };
 
   // Open modal for editing
-  const openEditModal = (counter: Counter) => {
+  const openEditModal = (counter: CounterRow) => {
     setModalMode('edit');
     setEditingCounterId(counter.id);
     setFormName(counter.name);
-    setFormStaff(counter.staffName === 'Unassigned' ? '' : counter.staffName);
-    setFormStatus(counter.status);
-    setFormServicesString(counter.services.join(', '));
+    setFormStaffId(counter.staff_id ?? '');
+    setFormStatus(counter.status === 'inactive' ? 'inactive' : 'active');
+    setFormServiceNames(counter.services ?? []);
     setIsModalOpen(true);
   };
 
-  // Delete counter
-  const handleDeleteCounter = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to permanently delete "${name}"?`)) {
-      setCounters(prev => prev.filter(c => c.id !== id));
-      triggerToast(`Successfully removed ${name} from active desk matrices.`);
-      setSystemLogs(prev => [`Desk registry "${name}" was decommissioned by Administrator.`, ...prev]);
-    }
-  };
+  // Delete counter (real delete with real error handling)
+  const handleDeleteCounter = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${name}"?`)) return;
 
-  // Form Submission
-  const handleSaveCounter = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      alert('Counter name cannot be empty');
+    const { error } = await supabase.from('counters').delete().eq('id', id);
+    if (error) {
+      console.error('Failed to delete counter:', error.message);
+      triggerToast(`Failed to delete "${name}": ${error.message}`);
       return;
     }
-
-    const servicesArray = formServicesString
-      .split(',')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    const resolvedStaff = formStaff.trim() || 'Unassigned';
-
-    if (modalMode === 'create') {
-      const newCounter: Counter = {
-        id: Date.now().toString(),
-        name: formName,
-        staffName: resolvedStaff,
-        status: formStatus,
-        services: servicesArray.length > 0 ? servicesArray : ['General Services']
-      };
-      setCounters(prev => [...prev, newCounter]);
-      triggerToast(`Created new active terminal "${formName}" successfully!`);
-      setSystemLogs(prev => [`New terminal ${formName} was commissioned and linked to ${resolvedStaff}.`, ...prev]);
-    } else {
-      setCounters(prev => prev.map(c => {
-        if (c.id === editingCounterId) {
-          return {
-            ...c,
-            name: formName,
-            staffName: resolvedStaff,
-            status: formStatus,
-            services: servicesArray.length > 0 ? servicesArray : ['General Services']
-          };
-        }
-        return c;
-      }));
-      triggerToast(`Updated configurations for "${formName}" instantly.`);
-      setSystemLogs(prev => [`Configurations set on terminal ${formName} were synchronized.`, ...prev]);
-    }
-
-    setIsModalOpen(false);
+    triggerToast(`Removed "${name}".`);
+    loadCounters();
   };
 
-  // Calculated Stats
-  const activeCount = counters.filter(c => c.status === 'Active').length;
-  const totalCount = counters.length;
+  // Form Submission — real insert/update against the counters table
+  const handleSaveCounter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = formName.trim();
+    if (!name) {
+      triggerToast('Counter name cannot be empty.');
+      return;
+    }
+    if (counters.some(c => c.id !== editingCounterId && c.name.toLowerCase() === name.toLowerCase())) {
+      triggerToast(`A counter named "${name}" already exists.`);
+      return;
+    }
+    if (formStaffId) {
+      const conflict = counters.find(c => c.id !== editingCounterId && c.staff_id === formStaffId);
+      if (conflict) {
+        triggerToast(`This staff member is already assigned to "${conflict.name}".`);
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    const payload = {
+      name,
+      staff_id: formStaffId || null,
+      status: formStatus,
+      services: formServiceNames
+    };
+    const { error } = modalMode === 'create'
+      ? await supabase.from('counters').insert(payload)
+      : await supabase.from('counters').update(payload).eq('id', editingCounterId);
+    setIsSaving(false);
+
+    if (error) {
+      console.error('Failed to save counter:', error.message);
+      triggerToast(`Failed to save "${name}": ${error.message}`);
+      return;
+    }
+    triggerToast(modalMode === 'create' ? `Created "${name}".` : `Updated "${name}".`);
+    setIsModalOpen(false);
+    loadCounters();
+  };
 
   // Filtering
   const filteredCounters = counters.filter(c => {
     const query = searchQuery.toLowerCase();
     return c.name.toLowerCase().includes(query) ||
-           c.staffName.toLowerCase().includes(query) ||
+           (c.staff_name ?? '').toLowerCase().includes(query) ||
            c.services.some(s => s.toLowerCase().includes(query));
   });
 
@@ -1582,7 +2066,7 @@ export function CounterManagementScreen() {
 
       <AdminLayout 
         title="Counter Management" 
-        description="Configure and monitor your branch teller stations in real-time."
+        description="Configure branch counters and assign staff."
       >
         <div className="space-y-8 max-w-6xl w-full pb-12">
           
@@ -1595,7 +2079,7 @@ export function CounterManagementScreen() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search station or teller..."
+                placeholder="Search counters or staff..."
                 className="pl-9 pr-4 py-2 bg-white border border-outline-variant/60 rounded-full text-xs font-semibold text-primary w-full focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none transition-all placeholder:text-slate-400 shadow-sm"
               />
             </div>
@@ -1612,40 +2096,47 @@ export function CounterManagementScreen() {
 
           {/* Counters Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCounters.length === 0 ? (
+            {loadingCounters ? (
+              <div className="bg-white rounded-xl p-12 text-center col-span-full border border-outline-variant/30">
+                <p className="text-xs font-bold text-on-surface-variant animate-pulse">Loading counters...</p>
+              </div>
+            ) : filteredCounters.length === 0 ? (
               <div className="bg-white rounded-xl p-12 text-center col-span-full border border-outline-variant/30 flex flex-col items-center justify-center space-y-3">
                 <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center">
                   <Sliders className="w-5 h-5 text-slate-300" />
                 </div>
-                <p className="text-xs font-bold text-on-surface-variant">No matching counter stations registered in this segment.</p>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Expand query or register a new counter unit</span>
+                <p className="text-xs font-bold text-on-surface-variant">
+                  {counters.length === 0
+                    ? 'No counters yet. Click Add Counter to create one.'
+                    : 'No matching counters found.'}
+                </p>
               </div>
             ) : (
               filteredCounters.map((counter) => (
                 <div 
                   key={counter.id}
                   className={`bg-white rounded-xl p-6 border-t-4 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative overflow-hidden ${
-                    counter.status === 'Active' ? 'border-[#fed977]' : 'border-slate-300'
+                    counter.status === 'active' ? 'border-[#fed977]' : 'border-slate-300'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <div className={`p-2 rounded-lg ${counter.status === 'Active' ? 'bg-[#fed977]/20 text-[#755b00]' : 'bg-slate-100 text-slate-400'}`}>
+                    <div className={`p-2 rounded-lg ${counter.status === 'active' ? 'bg-[#fed977]/20 text-[#755b00]' : 'bg-slate-100 text-slate-400'}`}>
                       <Layout className="w-5 h-5" />
                     </div>
                     
                     <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
-                      counter.status === 'Active' 
+                      counter.status === 'active' 
                         ? 'bg-green-50 text-green-700 border-green-200' 
                         : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}>
-                      {counter.status}
+                      {counter.status === 'active' ? 'Active' : 'Inactive'}
                     </span>
                   </div>
 
                   <h3 className="text-sm font-extrabold text-primary mb-1">{counter.name}</h3>
                   
                   <p className="text-xs text-on-surface-variant font-bold mb-4 flex items-center gap-1.5">
-                    {counter.staffName === 'Unassigned' ? (
+                    {!counter.staff_id ? (
                       <>
                         <UserX className="w-3.5 h-3.5 text-slate-400" />
                         <span>Staff: <span className="font-semibold text-slate-400 italic">Unassigned</span></span>
@@ -1653,7 +2144,7 @@ export function CounterManagementScreen() {
                     ) : (
                       <>
                         <User className="w-3.5 h-3.5 text-[#755b00]" />
-                        <span>Staff: <span className="font-extrabold text-primary">{counter.staffName}</span></span>
+                        <span>Staff: <span className="font-extrabold text-primary">{counter.staff_name || 'Unassigned'}</span></span>
                       </>
                     )}
                   </p>
@@ -1661,14 +2152,18 @@ export function CounterManagementScreen() {
                   <div className="space-y-2">
                     <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Designated Services</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {counter.services.map((srv, idx) => (
-                        <span 
-                          key={idx} 
-                          className="bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold"
-                        >
-                          {srv}
-                        </span>
-                      ))}
+                      {counter.services.length > 0 ? (
+                        counter.services.map((srv, idx) => (
+                          <span 
+                            key={idx} 
+                            className="bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold"
+                          >
+                            {srv}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400">—</span>
+                      )}
                     </div>
                   </div>
 
@@ -1695,82 +2190,6 @@ export function CounterManagementScreen() {
             )}
           </div>
 
-          {/* Asymmetric Detail section */}
-          <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* Live stats card inside deep slate bg */}
-            <div className="lg:col-span-8 bg-[#0a1f44] text-white p-8 rounded-xl relative overflow-hidden flex flex-col justify-between shadow-md">
-              <div className="relative z-10">
-                <h3 className="text-lg font-extrabold text-[#fed977] uppercase tracking-wide">Live Statistics</h3>
-                <p className="text-xs text-blue-100/60 max-w-md mt-1 font-semibold">
-                  Branch performance overview for counters currently active in the rotation system.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-6 mt-10 relative z-10 border-t border-white/5 pt-6">
-                <div>
-                  <p className="text-3xl font-black font-mono tracking-tight text-white">{`0${activeCount}/0${totalCount}`}</p>
-                  <p className="text-[9px] text-[#7687b2] uppercase tracking-wider font-extrabold mt-1">Active Tellers</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-black font-mono tracking-tight text-white">12m</p>
-                  <p className="text-[9px] text-[#7687b2] uppercase tracking-wider font-extrabold mt-1">Avg. Service Time</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-black font-mono tracking-tight text-[#fed977]">08</p>
-                  <p className="text-[9px] text-[#7687b2] uppercase tracking-wider font-extrabold mt-1">Waiting Guests</p>
-                </div>
-              </div>
-
-              {/* Backing large motif */}
-              <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 text-white/[0.03] select-none pointer-events-none">
-                <Sliders className="w-64 h-64" />
-              </div>
-            </div>
-
-            {/* Notification logs & quick info columns */}
-            <div className="lg:col-span-4 space-y-4">
-              
-              {/* Notification Logs */}
-              <div className="bg-white p-6 rounded-xl border border-outline-variant/30 shadow-[0px_4px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4">
-                <h4 className="text-xs font-black uppercase tracking-wider text-primary">Terminal Warnings & Feed</h4>
-                
-                <ul className="space-y-3">
-                  {systemLogs.map((log, idx) => (
-                    <li key={idx} className="flex items-start gap-2.5 text-[11px] leading-relaxed font-semibold text-on-surface-variant">
-                      <span className="p-1 bg-amber-50 rounded text-[#755b00] shrink-0 mt-0.5">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                      </span>
-                      <span>{log}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Assignment alert section */}
-              <div className="bg-[#fed977] p-5 rounded-xl shadow-sm flex items-center justify-between border border-[#241a00]/5">
-                <div>
-                  <p className="text-[#241a00] text-[9px] uppercase font-black tracking-widest">Newest Assignment</p>
-                  <p className="text-[#785d00] text-xs font-extrabold mt-0.5">
-                    {counters.length > 0 && counters[counters.length - 1].staffName !== 'Unassigned' 
-                      ? `${counters[counters.length - 1].staffName} @ ${counters[counters.length - 1].name}`
-                      : 'Alex T. @ Counter 04'
-                    }
-                  </p>
-                </div>
-                <div className="bg-[#0a1f44] text-white w-9 h-9 rounded-full flex items-center justify-center shadow">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Footer lock bottom */}
-          <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Desks Registry ΓÇó Authorized Admins Protocol
-          </footer>
-
         </div>
       </AdminLayout>
 
@@ -1787,7 +2206,7 @@ export function CounterManagementScreen() {
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-[#fed977]" />
                 <h3 className="text-xs font-extrabold uppercase tracking-wider">
-                  {modalMode === 'create' ? 'Link New Channel Unit' : 'Configure Channel Unit'}
+                  {modalMode === 'create' ? 'Add Counter' : 'Edit Counter'}
                 </h3>
               </div>
               <button 
@@ -1801,10 +2220,10 @@ export function CounterManagementScreen() {
             {/* Form */}
             <form onSubmit={handleSaveCounter} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Counter Name/ID</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Counter Name</label>
                 <input 
                   type="text"
-                  placeholder="e.g. Counter 07"
+                  placeholder="e.g. Counter 01"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full bg-[#f3f3f3] border border-outline-variant/50 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
@@ -1812,14 +2231,25 @@ export function CounterManagementScreen() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Assigned Staff Member</label>
-                <input 
-                  type="text"
-                  placeholder="Leave blank for 'Unassigned'"
-                  value={formStaff}
-                  onChange={(e) => setFormStaff(e.target.value)}
-                  className="w-full bg-[#f3f3f3] border border-outline-variant/50 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
-                />
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Assigned Staff</label>
+                <select
+                  value={formStaffId}
+                  onChange={(e) => setFormStaffId(e.target.value)}
+                  className="w-full bg-[#f3f3f3] border border-outline-variant/50 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none cursor-pointer"
+                >
+                  <option value="">Unassigned</option>
+                  {staffOptions.map(st => {
+                    const assigned = counters.find(c => c.id !== editingCounterId && c.staff_id === st.id);
+                    return (
+                      <option key={st.id} value={st.id} disabled={!!assigned}>
+                        {st.name}{assigned ? ` — already assigned to ${assigned.name}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                {staffOptions.length === 0 && (
+                  <p className="text-[10px] text-slate-400 font-bold">No staff accounts available.</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -1828,33 +2258,45 @@ export function CounterManagementScreen() {
                   <label className="flex items-center gap-2 text-xs font-bold text-primary cursor-pointer">
                     <input 
                       type="radio"
-                      checked={formStatus === 'Active'}
-                      onChange={() => setFormStatus('Active')}
+                      checked={formStatus === 'active'}
+                      onChange={() => setFormStatus('active')}
                       className="text-[#755b00] focus:ring-0 cursor-pointer"
                     />
-                    <span>Active Rotation</span>
+                    <span>Active</span>
                   </label>
                   <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
                     <input 
                       type="radio"
-                      checked={formStatus === 'Inactive'}
-                      onChange={() => setFormStatus('Inactive')}
+                      checked={formStatus === 'inactive'}
+                      onChange={() => setFormStatus('inactive')}
                       className="text-[#755b00] focus:ring-0 cursor-pointer"
                     />
-                    <span>Inactive Offline</span>
+                    <span>Inactive</span>
                   </label>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Designated Services (comma-separated)</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. Cash Deposit, Withdrawal, Forex"
-                  value={formServicesString}
-                  onChange={(e) => setFormServicesString(e.target.value)}
-                  className="w-full bg-[#f3f3f3] border border-outline-variant/50 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
-                />
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Designated Services</label>
+                {serviceOptions.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 font-bold">No active services found. Add services in Service Management first.</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto border border-outline-variant/30 rounded-lg p-2 bg-[#f3f3f3] flex flex-col gap-1">
+                    {serviceOptions.map(srv => (
+                      <label key={srv} className="flex items-center gap-2 text-xs font-bold text-primary cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formServiceNames.includes(srv)}
+                          onChange={() => setFormServiceNames(prev =>
+                            prev.includes(srv) ? prev.filter(s => s !== srv) : [...prev, srv]
+                          )}
+                          className="text-[#755b00] focus:ring-0 cursor-pointer"
+                        />
+                        <span>{srv}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Actions Footer */}
@@ -1868,9 +2310,10 @@ export function CounterManagementScreen() {
                 </button>
                 <button 
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {modalMode === 'create' ? 'Register Station' : 'Apply Changes'}
+                  {isSaving ? 'Saving...' : modalMode === 'create' ? 'Add Counter' : 'Save Changes'}
                 </button>
               </div>
             </form>
@@ -1898,44 +2341,43 @@ export function CounterManagementScreen() {
 // Screen 4: Service Management
 interface ServiceItem {
   id: string;
+  code: string | null;
   name: string;
-  division: string;
-  duration: string;
-  priority: 'High' | 'Med' | 'Low';
-  status: 'Active' | 'Inactive';
+  base_wait_minutes: number | null;
+  description: string | null;
+  status: string;
+}
+
+function serviceSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export function ServiceManagementScreen() {
   useAdminSecurity(['admin']);
 
-  // Core Service Catalog State
-  const [services, setServices] = useState<ServiceItem[]>([
-    { id: 'SRV-001', name: 'Personal Account Opening', division: 'Retail Banking Division', duration: '25 mins', priority: 'High', status: 'Active' },
-    { id: 'SRV-002', name: 'Cash Withdrawal (>10k)', division: 'Teller Services', duration: '08 mins', priority: 'Med', status: 'Active' },
-    { id: 'SRV-003', name: 'Wealth Consultation', division: 'Premium Services', duration: '45 mins', priority: 'High', status: 'Active' },
-    { id: 'SRV-004', name: 'Forex Exchange', division: 'Treasury Dept', duration: '15 mins', priority: 'Low', status: 'Inactive' },
-    { id: 'SRV-005', name: 'Mortgage Application', division: 'Lending Services', duration: '60 mins', priority: 'Med', status: 'Active' },
-  ]);
+  // Core service catalog state (services table)
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [loadingServices, setLoadingServices] = useState<boolean>(true);
 
-  // Interactive configurations & alerts states
+  // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isAnalysing, setIsAnalysing] = useState(false);
-  const [bottleneckMsg, setBottleneckMsg] = useState(
-    '"Mortgage Application" duration is 15% above target. Consider reallocating staff from "Retail" or increasing service points.'
-  );
 
   // Modal controller state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form Fields
+  // Form fields
   const [formName, setFormName] = useState('');
-  const [formDivision, setFormDivision] = useState('');
-  const [formDuration, setFormDuration] = useState('');
-  const [formPriority, setFormPriority] = useState<'High' | 'Med' | 'Low'>('High');
-  const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>('Active');
+  const [formBaseWait, setFormBaseWait] = useState('10');
+  const [formDescription, setFormDescription] = useState('');
+  const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Trigger floating notifications helper
   const triggerToast = (msg: string) => {
@@ -1951,15 +2393,46 @@ export function ServiceManagementScreen() {
     }
   }, [toastMessage]);
 
+  // Load all services (paginated until a short page returns).
+  const loadServices = async () => {
+    setLoadingServices(true);
+    const rows: ServiceItem[] = [];
+    let from = 0;
+    let failed = false;
+    for (;;) {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, code, name, base_wait_minutes, description, status')
+        .order('code')
+        .order('name')
+        .range(from, from + 999);
+      if (error) {
+        console.error('Failed to load services:', error.message);
+        failed = true;
+        break;
+      }
+      const batch = (data ?? []) as ServiceItem[];
+      rows.push(...batch);
+      if (batch.length < 1000) break;
+      from += 1000;
+    }
+    if (!failed) setServices(rows);
+    setLoadingServices(false);
+  };
+
+  useEffect(() => {
+    loadServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Open modal triggers
   const openCreateModal = () => {
     setModalMode('create');
     setEditingId(null);
     setFormName('');
-    setFormDivision('Retail Banking Division');
-    setFormDuration('15 mins');
-    setFormPriority('High');
-    setFormStatus('Active');
+    setFormBaseWait('10');
+    setFormDescription('');
+    setFormStatus('active');
     setIsModalOpen(true);
   };
 
@@ -1967,87 +2440,125 @@ export function ServiceManagementScreen() {
     setModalMode('edit');
     setEditingId(srv.id);
     setFormName(srv.name);
-    setFormDivision(srv.division);
-    setFormDuration(srv.duration);
-    setFormPriority(srv.priority);
-    setFormStatus(srv.status);
+    setFormBaseWait(srv.base_wait_minutes !== null ? String(srv.base_wait_minutes) : '');
+    setFormDescription(srv.description ?? '');
+    setFormStatus(srv.status === 'inactive' ? 'inactive' : 'active');
     setIsModalOpen(true);
   };
 
-  // Delete Action handler
-  const handleDeleteService = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to permanently decommission service catalog item [${id}] "${name}"?`)) {
-      setServices(prev => prev.filter(s => s.id !== id));
-      triggerToast(`Decommissioned catalog item "${name}" successfully.`);
-    }
-  };
+  // Delete Action handler — blocked while queues.service_id still references it.
+  const handleDeleteService = async (id: string, name: string) => {
+    if (!window.confirm(`Delete service "${name}"? This cannot be undone.`)) return;
 
-  // Submit creator/updated service fields
-  const handleSaveService = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      alert('Service catalog name is required');
+    const { count: usage, error: usageError } = await supabase
+      .from('queues')
+      .select('id', { count: 'exact', head: true })
+      .eq('service_id', id);
+
+    if (usageError) {
+      console.error('Failed to check service usage:', usageError.message);
+      triggerToast('Could not verify service usage. Deletion cancelled.');
+      return;
+    }
+    if (usage && usage > 0) {
+      triggerToast(`"${name}" is referenced by ${usage} queue ticket${usage === 1 ? '' : 's'} and cannot be deleted.`);
       return;
     }
 
-    if (modalMode === 'create') {
-      const nextIdNum = services.length + 1;
-      const newSrv: ServiceItem = {
-        id: `SRV-0${nextIdNum < 10 ? '0' + nextIdNum : nextIdNum}`,
-        name: formName,
-        division: formDivision,
-        duration: formDuration,
-        priority: formPriority,
-        status: formStatus
-      };
-      setServices(prev => [...prev, newSrv]);
-      triggerToast(`Added "${formName}" to active service lists!`);
-    } else {
-      setServices(prev => prev.map(s => {
-        if (s.id === editingId) {
-          return {
-            ...s,
-            name: formName,
-            division: formDivision,
-            duration: formDuration,
-            priority: formPriority,
-            status: formStatus
-          };
-        }
-        return s;
-      }));
-      triggerToast(`Successfully modified catalog parameters for "${formName}".`);
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (error) {
+      console.error('Failed to delete service:', error.message);
+      triggerToast(`Failed to delete service: ${error.message}`);
+      return;
+    }
+    triggerToast(`Deleted "${name}" from the service catalog.`);
+    loadServices();
+  };
+
+  // Submit create/update service fields to the services table.
+  const handleSaveService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = formName.trim();
+    if (!name) {
+      triggerToast('Service name is required.');
+      return;
+    }
+    const baseWait = Number(formBaseWait);
+    if (!Number.isFinite(baseWait) || baseWait < 0) {
+      triggerToast('Base wait must be zero or a positive number of minutes.');
+      return;
     }
 
-    setIsModalOpen(false);
+    setIsSaving(true);
+    try {
+      if (modalMode === 'create') {
+        const slug = serviceSlug(name);
+        if (!slug) {
+          triggerToast('Service name is required.');
+          return;
+        }
+        if (services.some(s => s.id === slug)) {
+          triggerToast(`A service with the ID "${slug}" already exists.`);
+          return;
+        }
+        const { error } = await supabase.from('services').insert({
+          id: slug,
+          code: slug,
+          name,
+          base_wait_minutes: baseWait,
+          description: formDescription.trim() || null,
+          status: formStatus
+        });
+        if (error) {
+          console.error('Failed to add service:', error.message);
+          triggerToast(`Failed to add service: ${error.message}`);
+          return;
+        }
+        triggerToast(`Added "${name}" to the service catalog.`);
+        setIsModalOpen(false);
+        loadServices();
+      } else if (editingId) {
+        const { error } = await supabase
+          .from('services')
+          .update({
+            name,
+            base_wait_minutes: baseWait,
+            description: formDescription.trim() || null,
+            status: formStatus
+          })
+          .eq('id', editingId);
+        if (error) {
+          console.error('Failed to update service:', error.message);
+          triggerToast(`Failed to update service: ${error.message}`);
+          return;
+        }
+        triggerToast(`Updated "${name}".`);
+        setIsModalOpen(false);
+        loadServices();
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Simulated AI Analyzer
-  const handleRunAnalysis = () => {
-    setIsAnalysing(true);
-    triggerToast('Initiating SmartQ workflow analysis & transactional audit...');
-
-    setTimeout(() => {
-      setIsAnalysing(false);
-      setBottleneckMsg('Optimised! Recommended staff redistribution for Lending and Retail successfully computed.');
-      triggerToast('AI analysis completed. New operational recommendations compiled.');
-    }, 1800);
-  };
-
-  // Dynamically compute stats from state
-  const activeServicesCount = services.filter(s => s.status === 'Active').length;
-  // Sum up base average durations for a neat dynamic display
-  const averageDurationValue = services.length > 0 
-    ? Math.round(services.reduce((acc, curr) => acc + parseInt(curr.duration || '0'), 0) / services.length)
-    : 12.5;
+  // Dynamically computed stats from the loaded catalog (real data only).
+  const totalServicesCount = services.length;
+  const activeServicesCount = services.filter(s => s.status === 'active').length;
+  const inactiveServicesCount = totalServicesCount - activeServicesCount;
+  const baseWaitValues = services
+    .map(s => s.base_wait_minutes)
+    .filter((v): v is number => v !== null);
+  const averageBaseWait = baseWaitValues.length > 0
+    ? Math.round(baseWaitValues.reduce((a, b) => a + b, 0) / baseWaitValues.length)
+    : null;
 
   // Search Filter implementation
   const filteredServices = services.filter(srv => {
     const query = searchQuery.toLowerCase();
     return srv.id.toLowerCase().includes(query) ||
+           (srv.code ?? '').toLowerCase().includes(query) ||
            srv.name.toLowerCase().includes(query) ||
-           srv.division.toLowerCase().includes(query) ||
-           srv.priority.toLowerCase().includes(query) ||
+           (srv.description ?? '').toLowerCase().includes(query) ||
            srv.status.toLowerCase().includes(query);
   });
 
@@ -2064,7 +2575,9 @@ export function ServiceManagementScreen() {
           {/* Header Action Trigger Area */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider">Branch Segment: Retail & Premium Operations</p>
+              <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider">
+                {loadingServices ? 'Loading service catalog...' : `${totalServicesCount} service${totalServicesCount === 1 ? '' : 's'} in catalog`}
+              </p>
             </div>
             
             <button 
@@ -2082,25 +2595,27 @@ export function ServiceManagementScreen() {
             {/* Total Services Stats */}
             <div className="bg-white p-6 rounded-xl border border-outline-variant/30 flex flex-col gap-1 shadow-xs border-l-4 border-[#755b00]">
               <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Total Services</span>
-              <span className="text-xl font-extrabold text-primary">{activeServicesCount} Active</span>
+              <span className="text-xl font-extrabold text-primary">{loadingServices ? '—' : totalServicesCount}</span>
             </div>
 
-            {/* Average duration */}
+            {/* Active services */}
             <div className="bg-white p-6 rounded-xl border border-outline-variant/30 flex flex-col gap-1 shadow-xs border-l-4 border-[#755b00]">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Avg Duration</span>
-              <span className="text-xl font-extrabold text-primary">{averageDurationValue} mins</span>
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Active</span>
+              <span className="text-xl font-extrabold text-primary">{loadingServices ? '—' : activeServicesCount}</span>
             </div>
 
-            {/* Peak efficiency */}
+            {/* Inactive services */}
             <div className="bg-white p-6 rounded-xl border border-outline-variant/30 flex flex-col gap-1 shadow-xs border-l-4 border-[#755b00]">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Peak Load Efficiency</span>
-              <span className="text-xl font-extrabold text-primary">94%</span>
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Inactive</span>
+              <span className="text-xl font-extrabold text-primary">{loadingServices ? '—' : inactiveServicesCount}</span>
             </div>
 
-            {/* Dynamic staff projection */}
+            {/* Average base wait from base_wait_minutes */}
             <div className="bg-white p-6 rounded-xl border border-outline-variant/30 flex flex-col gap-1 shadow-xs border-l-4 border-[#755b00]">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Staff Allocation</span>
-              <span className="text-xl font-extrabold text-primary">12 Tellers</span>
+              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Avg Base Wait</span>
+              <span className="text-xl font-extrabold text-primary">
+                {loadingServices || averageBaseWait === null ? '—' : `${averageBaseWait} mins`}
+              </span>
             </div>
 
           </div>
@@ -2110,7 +2625,7 @@ export function ServiceManagementScreen() {
             
             {/* Table Control Header */}
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <h3 className="text-sm font-extrabold text-primary uppercase tracking-wider">Active Service Catalog</h3>
+              <h3 className="text-sm font-extrabold text-primary uppercase tracking-wider">Service Catalog</h3>
               
               {/* Search Control */}
               <div className="relative w-full sm:w-64">
@@ -2127,22 +2642,33 @@ export function ServiceManagementScreen() {
 
             {/* Structured responsive table body */}
             <div className="overflow-x-auto">
-              {filteredServices.length === 0 ? (
+              {loadingServices ? (
+                <div className="p-12 text-center flex flex-col items-center justify-center text-on-surface-variant/70 space-y-3">
+                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center">
+                    <Sliders className="w-5 h-5 text-slate-300 animate-pulse" />
+                  </div>
+                  <p className="text-xs font-bold">Loading service catalog...</p>
+                </div>
+              ) : filteredServices.length === 0 ? (
                 <div className="p-12 text-center flex flex-col items-center justify-center text-on-surface-variant/70 space-y-3">
                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center">
                     <Sliders className="w-5 h-5 text-slate-300" />
                   </div>
-                  <p className="text-xs font-bold">No matching services registered inside active catalogs.</p>
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Simplify search string params</span>
+                  <p className="text-xs font-bold">
+                    {services.length === 0 ? 'No services registered yet.' : 'No matching services found.'}
+                  </p>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">
+                    {services.length === 0 ? 'Add a service to get started' : 'Try a different search term'}
+                  </span>
                 </div>
               ) : (
                 <table className="w-full text-left text-xs border-collapse font-sans">
                   <thead className="bg-[#00081e] text-white">
                     <tr className="uppercase tracking-wider text-[10px] font-bold font-mono">
                       <th className="px-6 py-4">ID</th>
+                      <th className="px-6 py-4">Code</th>
                       <th className="px-6 py-4">Service Name</th>
-                      <th className="px-6 py-4">Avg Duration</th>
-                      <th className="px-6 py-4">Priority Level</th>
+                      <th className="px-6 py-4">Base Wait</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
@@ -2156,30 +2682,22 @@ export function ServiceManagementScreen() {
                         <td className="px-6 py-4 font-mono font-bold text-slate-500">
                           {item.id}
                         </td>
+                        <td className="px-6 py-4 font-mono text-[11px] font-bold text-on-surface-variant">
+                          {item.code || '—'}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="font-extrabold text-xs text-primary">{item.name}</span>
-                            <span className="text-[10px] text-slate-400 font-bold">{item.division}</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{item.description || '—'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-on-surface-variant font-mono text-[11px] font-bold">
-                          {item.duration}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
-                            item.priority === 'High' 
-                              ? 'bg-rose-50 text-rose-700 border-rose-200' 
-                              : item.priority === 'Med'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}>
-                            {item.priority}
-                          </span>
+                          {item.base_wait_minutes !== null ? `${item.base_wait_minutes} mins` : '—'}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${item.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-                            <span className={`text-[10px] uppercase font-black tracking-wider ${item.status === 'Active' ? 'text-emerald-700' : 'text-slate-400'}`}>
+                            <span className={`w-2 h-2 rounded-full ${item.status === 'active' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                            <span className={`text-[10px] uppercase font-black tracking-wider ${item.status === 'active' ? 'text-emerald-700' : 'text-slate-400'}`}>
                               {item.status}
                             </span>
                           </div>
@@ -2190,7 +2708,7 @@ export function ServiceManagementScreen() {
                             <button 
                               onClick={() => openEditModal(item)}
                               className="p-1.5 hover:bg-[#fed977]/30 text-[#755b00] rounded-full transition-colors cursor-pointer"
-                              title="Edit service specifications"
+                              title="Edit service"
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
@@ -2198,7 +2716,7 @@ export function ServiceManagementScreen() {
                             <button 
                               onClick={() => handleDeleteService(item.id, item.name)}
                               className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-full transition-colors cursor-pointer"
-                              title="Decommission service catalog"
+                              title="Delete service"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2211,78 +2729,18 @@ export function ServiceManagementScreen() {
               )}
             </div>
 
-            {/* Pagination Controls */}
+            {/* Result count */}
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
               <span className="text-xs text-on-surface-variant font-bold leading-none">
-                Showing {filteredServices.length} of {services.length} registered entries
+                Showing {filteredServices.length} of {services.length} services
               </span>
-              
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => triggerToast("First catalog segment loaded.")}
-                  className="p-1 text-slate-500 hover:text-slate-700 bg-slate-50 rounded border border-outline-variant/40 shadow-sm cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => triggerToast("Pagination query is locked to regional segments.")}
-                  className="p-1 text-slate-500 hover:text-slate-700 bg-slate-50 rounded border border-outline-variant/40 shadow-sm cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
             </div>
 
           </div>
 
-          {/* Atmospheric bottom intelligence grid */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Run Analysis Panel */}
-            <div className="bg-[#0a1f44] text-white p-8 rounded-xl relative overflow-hidden flex flex-col justify-between shadow-md">
-              <div className="relative z-10 space-y-2">
-                <span className="bg-[#fed977] text-[#241a00] text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm">
-                  SmartQ Analytics
-                </span>
-                <h4 className="text-base font-extrabold text-[#fed977] uppercase tracking-wide">Service Optimization AI</h4>
-                <p className="text-xs text-blue-100/60 leading-relaxed font-semibold max-w-sm">
-                  SmartQ is currently analyzing 2,400+ transactions to suggest active queue priority re-routing during peak hours.
-                </p>
-              </div>
-
-              <div className="pt-6 relative z-10">
-                <button 
-                  onClick={handleRunAnalysis}
-                  disabled={isAnalysing}
-                  className="bg-[#fed977] text-[#241a00] px-5 py-2.5 rounded-lg font-bold text-xs hover:bg-[#ffe08f] transition-all cursor-pointer disabled:opacity-40"
-                >
-                  {isAnalysing ? 'Run Analytics...' : 'Run Analysis'}
-                </button>
-              </div>
-
-              <div className="absolute right-[-20px] bottom-[-20px] text-white/[0.04] pointer-events-none select-none">
-                <Sparkles className="w-48 h-48" />
-              </div>
-            </div>
-
-            {/* Warnings Alert Log section */}
-            <div className="bg-white border border-outline-variant/30 p-8 rounded-xl shadow-xs flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#fed977]/30 text-[#755b00] shrink-0 flex items-center justify-center shadow-inner">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-black uppercase tracking-wider text-primary">Bottleneck Warning</h4>
-                <p className="text-xs text-on-surface-variant font-bold leading-relaxed">
-                  {bottleneckMsg}
-                </p>
-              </div>
-            </div>
-
-          </section>
-
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Services Network Portal ΓÇó Secured System Access
+            SmartQ Services Network Portal — Secured System Access
           </footer>
 
         </div>
@@ -2323,57 +2781,54 @@ export function ServiceManagementScreen() {
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full bg-[#f3f3f3] border border-outline-variant/50 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
                 />
+                {modalMode === 'create' && serviceSlug(formName) && (
+                  <p className="text-[10px] text-slate-400 font-bold font-mono">
+                    ID / Code: {serviceSlug(formName)}
+                  </p>
+                )}
+                {modalMode === 'edit' && editingId && (
+                  <p className="text-[10px] text-slate-400 font-bold font-mono">
+                    ID: {editingId}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Division Name, Dept</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Wait (minutes)</label>
                   <input 
-                    type="text"
-                    placeholder="e.g. Retail Services"
-                    value={formDivision}
-                    onChange={(e) => setFormDivision(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 10"
+                    value={formBaseWait}
+                    onChange={(e) => setFormBaseWait(e.target.value)}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
                   />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Avg Interval Duration</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. 15 mins"
-                    value={formDuration}
-                    onChange={(e) => setFormDuration(e.target.value)}
-                    className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Priority Rank</label>
-                  <select 
-                    value={formPriority}
-                    onChange={(e) => setFormPriority(e.target.value as 'High' | 'Med' | 'Low')}
-                    className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none cursor-pointer"
-                  >
-                    <option value="High">≡ƒö┤ High Priority</option>
-                    <option value="Med">≡ƒƒí Medium Priority</option>
-                    <option value="Low">ΓÜ¬ Low Priority</option>
-                  </select>
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Operational Status</label>
                   <select 
                     value={formStatus}
-                    onChange={(e) => setFormStatus(e.target.value as 'Active' | 'Inactive')}
+                    onChange={(e) => setFormStatus(e.target.value as 'active' | 'inactive')}
                     className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none cursor-pointer"
                   >
-                    <option value="Active">≡ƒƒó Active Rotation</option>
-                    <option value="Inactive">ΓÜ½ Offline/Inactive</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Description</label>
+                <textarea 
+                  rows={3}
+                  placeholder="Short description shown to customers"
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full bg-[#f3f3f3] border border-outline-variant/30 rounded-lg px-3 py-2 text-xs font-bold text-primary focus:border-[#755b00] focus:ring-1 focus:ring-[#755b00]/30 outline-none resize-none"
+                />
               </div>
 
               {/* Action Buttons Footer */}
@@ -2387,9 +2842,10 @@ export function ServiceManagementScreen() {
                 </button>
                 <button 
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {modalMode === 'create' ? 'Register Service' : 'Save Configurations'}
+                  {isSaving ? 'Saving...' : modalMode === 'create' ? 'Register Service' : 'Save Changes'}
                 </button>
               </div>
             </form>
@@ -2415,15 +2871,6 @@ export function ServiceManagementScreen() {
 }
 
 // Screen 5: User Management
-interface UserItem {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Admin' | 'Manager' | 'Staff' | 'Customer';
-  status: 'Active' | 'Inactive' | 'Pending';
-  avatarUrl: string;
-}
-
 export function UserManagementScreen() {
   useAdminSecurity(['admin']);
 
@@ -2431,9 +2878,9 @@ export function UserManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('All Roles');
-  const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -2461,16 +2908,23 @@ export function UserManagementScreen() {
 
   useEffect(() => {
     loadUsers();
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user.id ?? null);
+    });
   }, []);
 
-  // Change user role in Supabase
+  // Change user role in Supabase (roles are stored on the profiles row)
   const handleRoleChange = async (userId: string, newRole: string, userName: string) => {
+    if (!window.confirm(`Change ${userName}'s role to "${newRole}"?`)) return;
+
     setUpdatingId(userId);
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      user_metadata: { role: newRole }
-    });
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: newRole })
+      .eq('id', userId);
 
     if (error) {
+      console.error('Failed to update role:', error.message);
       triggerToast('Failed to update role: ' + error.message);
     } else {
       triggerToast(`Role updated to "${newRole}" for ${userName}`);
@@ -2590,11 +3044,11 @@ export function UserManagementScreen() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-white font-bold text-sm shrink-0">
-                              {(user.full_name || user.email || '?').charAt(0).toUpperCase()}
+                              {(user.full_name || user.email || '—').charAt(0).toUpperCase()}
                             </div>
                             <div>
                               <span className="font-extrabold text-xs text-primary block">
-                                {user.full_name || 'ΓÇö'}
+                                {user.full_name || (user.email ? user.email.split('@')[0] : '—')}
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono">{user.id.slice(0, 8)}...</span>
                             </div>
@@ -2617,7 +3071,7 @@ export function UserManagementScreen() {
                               ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
-                            {user.role || 'unknown'}
+                            {user.role || '—'}
                           </span>
                         </td>
 
@@ -2633,8 +3087,10 @@ export function UserManagementScreen() {
                           ) : (
                             <select
                               value={user.role || 'customer'}
+                              disabled={user.id === currentUserId}
+                              title={user.id === currentUserId ? 'You cannot change your own role' : undefined}
                               onChange={(e) => handleRoleChange(user.id, e.target.value, user.full_name || user.email)}
-                              className="bg-[#f3f3f3] border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold text-primary outline-none cursor-pointer focus:border-[#755b00]"
+                              className="bg-[#f3f3f3] border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold text-primary outline-none cursor-pointer focus:border-[#755b00] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <option value="customer">Customer</option>
                               <option value="staff">Staff</option>
@@ -2694,7 +3150,7 @@ export function UserManagementScreen() {
           </section>
 
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Security Central Core ΓÇó Branch Registry System
+            SmartQ Security Central Core — Branch Registry System
           </footer>
         </div>
       </AdminLayout>
@@ -2712,10 +3168,10 @@ export function UserManagementScreen() {
     </div>
   );
 }
-// Screen 6: Wait Time Prediction
+// Screen 6: Wait Time Prediction (customer-only)
 export function WaitTimePredictionScreen() {
   const navigate = useNavigate();
-  const userRole = useAdminSecurity();
+  useAdminSecurity(['customer']);
 
   useEffect(() => {
     if (!localStorage.getItem('userRole')) {
@@ -2723,101 +3179,269 @@ export function WaitTimePredictionScreen() {
     }
   }, [navigate]);
 
-  // Core forecast states
-  const [serviceCode, setServiceCode] = useState<string>('cash_deposit');
-  const [peopleAhead, setPeopleAhead] = useState<number>(15);
-  const [activeTellers, setActiveTellers] = useState<number>(4);
-  const [timeOfDay, setTimeOfDay] = useState<string>('afternoon');
+  // Core forecast states (filled from live Supabase data)
+  const [serviceCode, setServiceCode] = useState<string>('');
+  const [peopleAhead, setPeopleAhead] = useState<number>(0);
+  const [activeTellers, setActiveTellers] = useState<number>(1);
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDayKey>('afternoon');
 
   // Interactive delay simulation state
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [recalibrating, setRecalibrating] = useState<boolean>(false);
 
-  // Admin tunable parameters
-  const [isModelActive, setIsModelActive] = useState<boolean>(true);
-  const [editMultiplier, setEditMultiplier] = useState<number>(1.0);
+  // Live data loading flags
+  const [isLoadingLive, setIsLoadingLive] = useState<boolean>(true);
+  const [hasActiveTicket, setHasActiveTicket] = useState<boolean>(false);
+  const [ticketServiceName, setTicketServiceName] = useState<string>('');
+  const [activeTicket, setActiveTicket] = useState<any>(null);
 
-  // Simulation History log state
-  const [historyList, setHistoryList] = useState([
-    { id: 'p-1', timestamp: '09:42 AM', customer: 'Session User', service: 'General Banking', ahead: 12, tellers: 3, result: 32, status: 'Accurate', actual: '30 mins' },
-    { id: 'p-2', timestamp: '10:15 AM', customer: 'Session User', service: 'Forex Exchange', ahead: 8, tellers: 1, result: 55, status: 'Accurate', actual: '58 mins' },
-    { id: 'p-3', timestamp: '11:05 AM', customer: 'Session User', service: 'Loan Inquiry', ahead: 21, tellers: 5, result: 18, status: 'Drift Detected', actual: '25 mins' },
-    { id: 'p-4', timestamp: '11:30 AM', customer: 'Session User', service: 'General Banking', ahead: 14, tellers: 4, result: 22, status: 'Pending', actual: '--' }
-  ]);
+  // Active services loaded from the services table
+  const [serviceOptions, setServiceOptions] = useState<{ id: string; name: string; baseTime: number | null }[]>([]);
+  const [servicesLoading, setServicesLoading] = useState<boolean>(true);
 
-  // Audit Logs for admin view
-  const [auditLogs, setAuditLogs] = useState<string[]>([
-    '09:00 AM: SmartQ Predictive Engine v4.2.0 initialized with accuracy metrics optimized.',
-    '10:15 AM: Hourly teller speed coefficient auto-calculated by server cron.',
-    '11:42 AM: ML Engine status validated by Admin Portal.'
-  ]);
+  // Live countdown: a fixed deadline per ticket position plus a 1-second clock.
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [estimateTotalMs, setEstimateTotalMs] = useState<number>(0);
+  const [now, setNow] = useState<number>(() => Date.now());
+  const [alertPermission, setAlertPermission] = useState<NotificationPermission | 'unsupported'>(
+    () => getAlertPermission()
+  );
 
-  const serviceData: Record<string, { name: string; baseTime: number }> = {
-  cash_deposit:    { name: 'General Banking',    baseTime: 8.2  }, // dataset base
-  account_opening: { name: 'Corporate Services', baseTime: 15.6 }, // complex = 1.5x base
-  cash_withdrawal: { name: 'Forex Exchange',     baseTime: 10.4 }, // dataset average
-  loan_inquiry:    { name: 'Loan Inquiry',       baseTime: 13.5 }, // dataset 75th percentile
-  card_services:   { name: 'Card Services',      baseTime: 9.2  }, // slightly above base
-  general_inquiry: { name: 'Wealth Management',  baseTime: 6.8  }, // dataset 25th percentile
-};
+  // Load live branch data from Supabase: queue length, active counters, time of
+  // day, the customer's own active ticket and the customer's own recent tickets.
+  const loadLiveQueueData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-  const peakFactors: Record<string, { label: string; factor: number }> = {
-  morning:   { label: 'Morning Peak (x1.1)',     factor: 1.1 }, // mild increase
-  lunch:     { label: 'Lunch Hour Peak (x1.5)',  factor: 1.5 }, // highest load
-  afternoon: { label: 'Afternoon Steady (x1.0)', factor: 1.0 }, // baseline = dataset avg
-  evening:   { label: 'Evening Rush (x1.3)',     factor: 1.3 }, // moderate increase
-};
+      let ownTicket: any = null;
+      if (user) {
+        const { data: activeRows, error: activeError } = await supabase
+          .from('queues')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ['waiting', 'serving'])
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (activeError) console.error('Error loading active ticket:', activeError.message);
+        if (activeRows && activeRows.length > 0) ownTicket = activeRows[0];
+      }
+      setActiveTicket(ownTicket);
+      setHasActiveTicket(!!ownTicket);
+      setTicketServiceName(ownTicket?.service_name ?? '');
 
-  const currentService = serviceData[serviceCode] || { name: 'General Banking', baseTime: 8 };
-  const currentPeak = peakFactors[timeOfDay] || { label: 'Afternoon Steady', factor: 0.9 };
-  
-  const baseTime = currentService.baseTime;
-  const multiplier = isModelActive ? editMultiplier : 1.0;
-  
-  // Interactive Wait prediction formula
-  const datasetBase = 8.2;
-const datasetPerPerson = 0.3;
+      if (ownTicket) {
+        // Show how many people are actually ahead of this customer.
+        const { count: aheadCount, error: aheadError } = await supabase
+          .from('queues')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'waiting')
+          .lt('created_at', ownTicket.created_at);
+        if (aheadError) {
+          console.error('Error counting customers ahead:', aheadError.message);
+          setPeopleAhead(ownTicket.waiting_ahead || 0);
+        } else {
+          setPeopleAhead(aheadCount || 0);
+        }
+        if (ownTicket.service_id) {
+          setServiceCode(ownTicket.service_id);
+        }
+      } else {
+        const { count, error } = await supabase
+          .from('queues')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'waiting');
+        if (error) console.error('Error loading queue length:', error.message);
+        else setPeopleAhead(count || 0);
+      }
 
-const computedDuration = isModelActive
-  ? Math.round(
-      (baseTime + (peopleAhead / (activeTellers || 1)) * datasetPerPerson)
-      * currentPeak.factor
-      * multiplier
-    )
-  : Math.round(
-      (datasetBase + (peopleAhead / (activeTellers || 1)) * datasetPerPerson)
-      * currentPeak.factor
-    );
+      // Active counters come from the counters table (minimum 1 for the formula).
+      const { count: activeCounterCount, error: counterError } = await supabase
+        .from('counters')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active');
+      if (counterError) console.error('Error loading active counters:', counterError.message);
+      else setActiveTellers(activeCounterCount && activeCounterCount > 0 ? activeCounterCount : 1);
 
-  const finalWaitTime = computedDuration < 1 ? 1 : computedDuration;
+      setTimeOfDay(getTimeOfDayKey());
+
+      // Recent tickets — the customer only ever sees their own.
+      if (user) {
+        const { data: historyRows, error: historyError } = await supabase
+          .from('queues')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (historyError) console.error('Error loading prediction history:', historyError.message);
+        else setHistoryList((historyRows || []) as any[]);
+      } else {
+        setHistoryList([]);
+      }
+    } catch (err) {
+      console.error('Failed to load live queue data:', err);
+    } finally {
+      setIsLoadingLive(false);
+    }
+  };
+
+  // Load active services for the Service Type selector (once on mount).
+  useEffect(() => {
+    const loadServices = async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name, base_wait_minutes')
+        .eq('status', 'active')
+        .order('code')
+        .order('name');
+      if (error) {
+        console.error('Failed to load services:', error.message);
+      } else {
+        setServiceOptions(
+          ((data ?? []) as { id: string; name: string; base_wait_minutes: number | null }[]).map(s => ({
+            id: s.id,
+            name: s.name,
+            baseTime: s.base_wait_minutes
+          }))
+        );
+      }
+      setServicesLoading(false);
+    };
+    loadServices();
+  }, []);
+
+  // Initial load plus a 10 second refresh of the live branch data.
+  useEffect(() => {
+    loadLiveQueueData();
+    const poll = setInterval(loadLiveQueueData, 10000);
+    return () => clearInterval(poll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Real-time refresh of the customer's own ticket (plus the polling above).
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+
+      channel = supabase
+        .channel(`wtp-ticket-${user.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'queues',
+          filter: `user_id=eq.${user.id}`,
+        }, () => {
+          loadLiveQueueData();
+        })
+        .subscribe();
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Simulation History log state (filled from real queue tickets)
+  const [historyList, setHistoryList] = useState<any[]>([]);
+
+  // Service resolution: real rows from the services table (active only).
+  const effectiveServiceCode =
+    serviceCode && serviceOptions.some(s => s.id === serviceCode)
+      ? serviceCode
+      : (serviceOptions[0]?.id ?? '');
+  const currentService = serviceOptions.find(s => s.id === effectiveServiceCode) ?? null;
+  const currentServiceName = currentService?.name || ticketServiceName || '—';
+  const currentPeak = PEAK_FACTORS[timeOfDay];
+
+  // Shared wait prediction formula (src/predictWait.ts)
+  const baseTime = currentService && currentService.baseTime !== null ? currentService.baseTime : DATASET_BASE;
+
+  const finalWaitTime = predictWaitRounded({
+    baseWait: baseTime,
+    peopleAhead,
+    activeCounters: activeTellers,
+    timeOfDay,
+  });
+
+  // Unrounded estimate in minutes — keeps second-level accuracy for the countdown.
+  const remainingMinutes = predictWaitMinutes({
+    baseWait: baseTime,
+    peopleAhead,
+    activeCounters: activeTellers,
+    timeOfDay,
+  });
+
+  // 1-second clock for the live countdown.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // The deadline is set only when the ticket, the queue position or the active
+  // counter count changes, so the timer never jumps on the 10-second refresh.
+  const currentServiceId = currentService?.id ?? null;
+  useEffect(() => {
+    if (!activeTicket || activeTicket.status !== 'waiting') return;
+    const totalMs = remainingMinutes * 60000;
+    setEstimateTotalMs(totalMs);
+    setDeadline(Date.now() + totalMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTicket?.id, peopleAhead, activeTellers, currentServiceId]);
+
+  const remainingSeconds =
+    deadline === null ? 0 : Math.max(0, Math.round((deadline - now) / 1000));
+
+  const countdownProgress =
+    deadline !== null && estimateTotalMs > 0
+      ? Math.min(1, Math.max(0, 1 - (deadline - now) / estimateTotalMs))
+      : 0;
+
+  const formatClock = (totalSeconds: number) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    if (h > 0) {
+      return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // One-time 5-minute reminder (deviceAlert deduplicates per ticket + key).
+  useEffect(() => {
+    if (!activeTicket || activeTicket.status !== 'waiting') return;
+    if (remainingSeconds > 0 && remainingSeconds <= 300) {
+      deviceAlert({
+        userId: activeTicket.user_id,
+        key: `${activeTicket.id}:almost`,
+        title: 'Get ready — about 5 minutes left',
+        body: `Ticket ${activeTicket.ticket_number}: your turn is coming up soon. Please stay close to the counters.`,
+      }).catch((err) => console.error('WaitTimePrediction: device alert failed', err));
+    }
+  }, [remainingSeconds, activeTicket]);
+
+  const handleEnableAlerts = async () => {
+    const result = await requestAlertPermission();
+    setAlertPermission(result);
+  };
 
   const handleSimulate = (e: React.FormEvent) => {
     e.preventDefault();
     setIsCalculating(true);
-    
+
+    // Always refresh from the latest live branch data.
+    loadLiveQueueData();
+
     setTimeout(() => {
       setIsCalculating(false);
-      const newLog = {
-        id: `p-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        customer: userRole === 'customer' ? 'You' : 'Simulated User',
-        service: currentService.name,
-        ahead: peopleAhead,
-        tellers: activeTellers,
-        result: finalWaitTime,
-        status: 'Pending',
-        actual: '--'
-      };
-      setHistoryList(prev => [newLog, ...prev]);
-
-      if (userRole === 'admin') {
-        const logMsg = `${newLog.timestamp}: Operator triggered custom simulation of ${finalWaitTime} mins for ${currentService.name}.`;
-        setAuditLogs(prev => [logMsg, ...prev]);
-      }
-      
-      showToast(`Calculation successful: ${finalWaitTime} minutes predicted!`);
-    }, 1200);
+      showToast(`Wait time recalculated: ${finalWaitTime} minutes predicted.`);
+    }, 700);
   };
 
   const showToast = (msg: string) => {
@@ -2827,50 +3451,38 @@ const computedDuration = isModelActive
     }, 4000);
   };
 
-  const handleDelete = (id: string) => {
-    setHistoryList(prev => prev.filter(item => item.id !== id));
-    if (userRole === 'admin') {
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setAuditLogs(prev => [`${nowStr}: Deleted prediction log row ${id} by Administrator.`, ...prev]);
+  // Actual wait = called_at - created_at (service time is excluded).
+  const getActualWait = (ticket: any): number | null => {
+    if (ticket?.called_at && ticket?.created_at) {
+      const diffMs = new Date(ticket.called_at).getTime() - new Date(ticket.created_at).getTime();
+      if (!Number.isNaN(diffMs) && diffMs >= 0) return Math.round(diffMs / 60000);
     }
+    return null;
   };
 
-  const handleToggleModel = () => {
-    const nextState = !isModelActive;
-    setIsModelActive(nextState);
-    if (userRole === 'admin') {
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setAuditLogs(prev => [`${nowStr}: Machine Learning Prediction model toggled to ${nextState ? 'Active' : 'Inactive'}.`, ...prev]);
+  // Status badge derived from real values, never randomised. A ticket is
+  // Accurate when the actual wait is within 25% of the prediction or within
+  // 5 minutes; waiting/serving tickets are Pending.
+  const getPredictionStatus = (ticket: any, actualWait: number | null): string => {
+    if (ticket?.status === 'waiting' || ticket?.status === 'serving') return 'Pending';
+    if (ticket?.status === 'no_show') return 'No Show';
+    if (ticket?.status === 'completed') {
+      if (actualWait === null || ticket?.estimated_wait === null || ticket?.estimated_wait === undefined) return 'No Data';
+      const predicted = Number(ticket.estimated_wait);
+      const within = Math.abs(actualWait - predicted) <= Math.max(5, predicted * 0.25);
+      return within ? 'Accurate' : 'Drift Detected';
     }
+    return 'No Data';
   };
 
-  const handleRecalibrate = () => {
-    setRecalibrating(true);
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (userRole === 'admin') {
-      setAuditLogs(prev => [`${nowStr}: Requested manual execution of deep epoch iteration calibration.`, ...prev]);
-    }
-    setTimeout(() => {
-      setRecalibrating(false);
-      if (userRole === 'admin') {
-        setAuditLogs(prev => [`${nowStr}: Model convergence successful. New error metric RMSE = 0.042.`, ...prev]);
-      }
-      showToast('SmartQ Predictive Core recalibrated successfully!');
-    }, 1500);
-  };
-
-  // Role assertions
-  const isCustomer = userRole === 'customer';
-  const isStaff = userRole === 'staff';
-  const isManager = userRole === 'manager';
-  const isAdmin = userRole === 'admin';
+  const displayedHistory = historyList;
 
   return (
     <div className="flex">
       <AdminSidebar activeItem="wait-time-prediction" />
       <AdminLayout 
         title="Wait Time Prediction" 
-        description="Dynamic prediction engine utilizing machine learning regression models based on real-time traffic."
+        description="Estimated wait time based on the live queue, active counters and the time of day."
       >
         <div className="space-y-6 max-w-6xl pb-10">
           
@@ -2888,60 +3500,54 @@ const computedDuration = isModelActive
                 <form onSubmit={handleSimulate} className="space-y-5">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-on-surface-variant">Queue Length</label>
-                      <input 
-                        type="number" 
-                        min="0"
-                        max="100"
-                        value={peopleAhead}
-                        onChange={(e) => setPeopleAhead(parseInt(e.target.value) || 0)}
-                        className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-semibold bg-white"
-                        placeholder="e.g. 15"
-                      />
+                      <label className="text-xs font-semibold text-on-surface-variant">Current queue length (live)</label>
+                      <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-sm font-semibold bg-[#F2F2F2] text-primary">
+                        {isLoadingLive ? 'Loading live data...' : peopleAhead}
+                      </div>
+                      <p className="text-[10px] text-outline font-medium">Live from branch data</p>
                     </div>
                     
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-on-surface-variant">Active Counters</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        max="10"
-                        value={activeTellers}
-                        onChange={(e) => setActiveTellers(parseInt(e.target.value) || 1)}
-                        className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-semibold bg-white"
-                        placeholder="e.g. 4"
-                      />
+                      <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-sm font-semibold bg-[#F2F2F2] text-primary">
+                        {isLoadingLive ? 'Loading live data...' : activeTellers}
+                      </div>
+                      <p className="text-[10px] text-outline font-medium">Live from branch data</p>
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-on-surface-variant">Service Type</label>
-                    <select 
-                      value={serviceCode} 
-                      onChange={(e) => setServiceCode(e.target.value)}
-                      className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-bold bg-white cursor-pointer py-2.5"
-                    >
-                      <option value="cash_deposit">General Banking</option>
-                      <option value="account_opening">Corporate Services</option>
-                      <option value="cash_withdrawal">Forex Exchange</option>
-                      <option value="general_inquiry">Wealth Management</option>
-                      <option value="loan_inquiry">Loan Inquiry</option>
-                      <option value="card_services">Card Services</option>
-                    </select>
+                    {hasActiveTicket ? (
+                      <>
+                        <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2.5 text-xs font-bold bg-[#F2F2F2] text-primary">
+                          {currentServiceName}
+                        </div>
+                        <p className="text-[10px] text-outline font-medium">From your active ticket</p>
+                      </>
+                    ) : (
+                      <select 
+                        value={effectiveServiceCode} 
+                        onChange={(e) => setServiceCode(e.target.value)}
+                        className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-bold bg-white cursor-pointer py-2.5"
+                      >
+                        {serviceOptions.length === 0 ? (
+                          <option value="">{servicesLoading ? 'Loading services...' : 'No services available'}</option>
+                        ) : (
+                          serviceOptions.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))
+                        )}
+                      </select>
+                    )}
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-on-surface-variant">Time of Day</label>
-                    <select 
-                      value={timeOfDay} 
-                      onChange={(e) => setTimeOfDay(e.target.value)}
-                      className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-bold bg-white cursor-pointer py-2.5"
-                    >
-                      <option value="afternoon">Afternoon Steady (Normal)</option>
-                      <option value="morning">Morning Peak (Slight delay)</option>
-                      <option value="lunch">Lunch Hour Peak (High delay)</option>
-                      <option value="evening">Evening Rush (Moderate delay)</option>
-                    </select>
+                    <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs font-bold bg-[#F2F2F2] text-primary">
+                      {currentPeak.label}
+                    </div>
+                    <p className="text-[10px] text-outline font-medium">Based on current time</p>
                   </div>
 
                   <button 
@@ -2967,23 +3573,6 @@ const computedDuration = isModelActive
                   </button>
                 </form>
               </section>
-
-              {/* Mini Insight Card */}
-              <div className="bg-[#00081e] p-6 rounded-xl text-white relative overflow-hidden shadow-sm">
-                <div className="absolute right-0 top-0 opacity-10 font-bold text-white text-[100px] select-none pointer-events-none font-mono">
-                  ML
-                </div>
-                <div className="relative z-10">
-                  <h4 className="text-[11px] font-bold text-[#fed977] uppercase tracking-wider mb-2">ML Model Status</h4>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
-                    <p className="text-sm font-semibold">Real-time Optimization Active</p>
-                  </div>
-                  <p className="text-xs text-[#EEEEEE]/80 leading-relaxed font-medium">
-                  Model trained on 560 real banking queue records. Base wait: 8.2 mins, per-person factor: 0.3 mins/counter derived from queue_data.csv analysis.
-                  </p>
-                </div>
-              </div>
             </div>
 
             {/* Right Column: Output visuals (7 cols) */}
@@ -3012,6 +3601,82 @@ const computedDuration = isModelActive
                       <p className="text-xs font-medium text-[#44464e] max-w-sm mb-12">
                         Based on current branch traffic, historical peak patterns, and active counter availability.
                       </p>
+
+                      {/* Device-alert opt-in — customers with an active ticket only */}
+                      {!isLoadingLive && hasActiveTicket && alertPermission === 'default' && (
+                        <div className="w-full max-w-md mb-4 rounded-xl border border-outline-variant/40 bg-[#F8F9FA] px-4 py-3 flex items-center justify-between gap-3 text-left">
+                          <p className="text-xs font-semibold text-on-surface">
+                            Get notified on this phone when your turn is near
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleEnableAlerts}
+                            className="shrink-0 text-xs font-bold text-secondary hover:underline cursor-pointer"
+                          >
+                            Enable alerts
+                          </button>
+                        </div>
+                      )}
+                      {!isLoadingLive && hasActiveTicket && alertPermission === 'denied' && (
+                        <p className="w-full max-w-md mb-4 text-xs font-medium text-outline">
+                          Alerts are blocked in your browser settings.
+                        </p>
+                      )}
+
+                      {/* Live countdown card — replaces the old estimate block */}
+                      {!isLoadingLive && (
+                        hasActiveTicket ? (
+                          activeTicket?.status === 'serving' ? (
+                            <div className="w-full max-w-md mb-8 rounded-xl border border-green-200 bg-green-50 px-6 py-5 text-center">
+                              <p className="text-lg font-extrabold text-green-700">It's your turn!</p>
+                              <p className="text-xs font-semibold text-green-700/80 mt-1">
+                                Please proceed to {activeTicket?.counter_id || 'the counter'}.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="w-full max-w-md mb-8 text-center">
+                              <p className="text-5xl sm:text-6xl font-extrabold text-primary font-mono tracking-tight leading-none">
+                                {deadline === null ? '--:--' : formatClock(remainingSeconds)}
+                              </p>
+                              <p className="text-xs text-on-surface-variant font-semibold uppercase tracking-wider mt-3">
+                                Estimated time until your turn
+                              </p>
+                              {remainingSeconds === 0 ? (
+                                <p className="text-sm font-bold text-amber-600 mt-2 animate-pulse">
+                                  Almost there — please stay near the counters.
+                                </p>
+                              ) : (
+                                <p className="text-xs text-on-surface-variant font-medium mt-2">
+                                  Ticket {activeTicket?.ticket_number} · {peopleAhead} ahead of you ·{' '}
+                                  {activeTicket?.service_name || currentServiceName}
+                                </p>
+                              )}
+                              <div className="h-1 w-full bg-surface-container-high rounded-full overflow-hidden mt-4">
+                                <div
+                                  className="h-full bg-secondary rounded-full transition-[width] duration-500"
+                                  style={{ width: `${Math.round(countdownProgress * 100)}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-[10px] text-outline font-medium mt-2">
+                                Estimate — updates when the queue moves.
+                              </p>
+                            </div>
+                          )
+                        ) : (
+                          <div className="w-full max-w-md mb-8 text-center">
+                            <p className="text-xs font-semibold text-on-surface-variant">
+                              Get a ticket to see your live countdown.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/queue-registration')}
+                              className="mt-3 text-xs font-bold text-secondary hover:underline cursor-pointer"
+                            >
+                              Register for a queue
+                            </button>
+                          </div>
+                        )
+                      )}
                     </>
                   )}
 
@@ -3051,93 +3716,10 @@ const computedDuration = isModelActive
                     </p>
                   </div>
                 </div>
-
-                {/* Prediction Metadata */}
-                <div className="bg-surface-container-low p-6 grid grid-cols-3 divide-x divide-outline-variant/30 border-t border-outline-variant/30 bg-[#f3f3f3]">
-                  <div className="text-center">
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Confidence</p>
-                    <p className="text-sm font-extrabold text-primary">78.4%</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Precision</p>
-                    <p className="text-sm font-extrabold text-primary">+/- 4.8m</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Last Update</p>
-                    <p className="text-sm font-extrabold text-primary">Just now</p>
-                  </div>
-                </div>
               </section>
             </div>
             
           </div>
-
-          {/* Model status view (Hides from Customer only) */}
-          {!isCustomer && (
-            <div className="bg-white p-6 rounded-2xl border border-outline-variant/30 shadow-sm space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <h3 className="font-bold text-primary text-sm flex items-center gap-1.5">
-                    <Cpu className="w-5 h-5 text-secondary shrink-0" /> ML Predictor Engine Control
-                  </h3>
-                  <p className="text-xs text-on-surface-variant font-medium leading-relaxed max-w-xl font-sans mt-1">
-                    SmartQ uses random forest classification combined with active queue load factors to predict actual physical counter wait times.
-                  </p>
-                </div>
-                
-                {/* Admin configuration status controls */}
-                <div className="flex items-center gap-3">
-                  <div className="text-xs font-bold text-right">
-                    <span className="text-outline block uppercase tracking-wider text-[10px]">Engine Status</span>
-                    <span className={`font-black uppercase text-xs ${isModelActive ? 'text-green-600' : 'text-rose-600'}`}>
-                      {isModelActive ? 'ΓùÅ Active' : 'ΓùÅ Inactive'}
-                    </span>
-                  </div>
-
-                  {/* Toggle button ONLY for Admin */}
-                  {isAdmin ? (
-                    <button 
-                      type="button"
-                      onClick={handleToggleModel}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-md cursor-pointer transition-colors ${
-                        isModelActive ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'
-                      }`}
-                    >
-                      {isModelActive ? 'Deactivate ML Engine' : 'Activate ML Engine'}
-                    </button>
-                  ) : (
-                    <span className="px-3 py-1.5 bg-[#F2F2F2] rounded-lg text-[10px] font-black uppercase text-outline">
-                      Read Only
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Edit predictions slider for Admin users */}
-              {isAdmin && (
-                <div className="p-4 bg-secondary-container/10 border border-secondary/25 rounded-xl space-y-3">
-                  <div className="flex justify-between items-center text-xs font-bold text-[#0A1F44]">
-                    <span className="uppercase tracking-wider">Admin Calibration: Engine Wait Multiplier</span>
-                    <span className="text-secondary bg-[#0A1F44] text-white px-2 py-0.5 rounded text-[11px] font-mono">
-                      {editMultiplier.toFixed(1)}x
-                    </span>
-                  </div>
-                  <input 
-                    type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.1"
-                    value={editMultiplier}
-                    onChange={(e) => setEditMultiplier(Number(e.target.value))}
-                    className="w-full accent-secondary h-1 bg-surface-container-low rounded-lg cursor-pointer"
-                  />
-                  <p className="text-[10px] font-medium text-[#0A1F44] opacity-75">
-                    Modifying the multiplier scales wait estimations up or down company-wide to compensate for emergency server outages or regional weather interruptions.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Bottom: Recent Predictions Table */}
           <div className="col-span-12 animate-fade-in">
@@ -3148,7 +3730,7 @@ const computedDuration = isModelActive
                   <h3 className="font-bold text-primary text-sm">Recent Predictions</h3>
                 </div>
                 <div className="text-xs text-outline font-semibold">
-                  Showing {isStaff ? 3 : historyList.length} records
+                  Showing {displayedHistory.length} records
                 </div>
               </div>
               
@@ -3162,74 +3744,66 @@ const computedDuration = isModelActive
                       <th className="px-6 py-4 font-semibold uppercase tracking-wider text-[11px] text-center">Predicted Time</th>
                       <th className="px-6 py-4 font-semibold uppercase tracking-wider text-[11px] text-center">Actual Wait</th>
                       <th className="px-6 py-4 font-semibold uppercase tracking-wider text-[11px] text-center">Status</th>
-                      {isAdmin && <th className="px-6 py-4 font-semibold uppercase tracking-wider text-[11px] text-center">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="text-primary font-semibold">
-                    {(isStaff ? historyList.slice(0, 3) : historyList).map((item, index) => (
-                      <tr key={item.id} className={index % 2 === 1 ? 'bg-[#F2F2F2]' : 'bg-white hover:bg-slate-50 border-b border-outline-variant/10'}>
-                        <td className="px-6 py-4 font-mono text-[11px] text-on-surface-variant font-bold">{item.timestamp}</td>
-                        <td className="px-6 py-4 font-bold">{item.service}</td>
-                        <td className="px-6 py-4 text-on-surface-variant font-medium">QL: {item.ahead} | Cnt: {item.tellers}</td>
-                        <td className="px-6 py-4 font-bold text-primary text-center text-sm">{item.result} mins</td>
-                        <td className="px-6 py-4 text-center font-bold text-on-surface-variant">{item.actual !== '--' ? item.actual : '--'}</td>
-                        <td className="px-6 py-4 text-center">
-                          {item.id.startsWith('p-') && parseFloat(item.id.split('-')[1]) > 50000 ? (
-                            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                              Pending
-                            </span>
-                          ) : item.result > 30 ? (
-                            <span className="px-3 py-1 rounded-full bg-[#ffe4e6] text-[#ba1a1a] text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                              Drift Detected
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full bg-[#dcfce7] text-[#15803d] text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                              Accurate
-                            </span>
-                          )}
+                    {displayedHistory.length > 0 ? (
+                      displayedHistory.map((ticket, index) => {
+                        const actualWait = getActualWait(ticket);
+                        const status = getPredictionStatus(ticket, actualWait);
+                        return (
+                          <tr key={ticket.id} className={index % 2 === 1 ? 'bg-[#F2F2F2]' : 'bg-white hover:bg-slate-50 border-b border-outline-variant/10'}>
+                            <td className="px-6 py-4 font-mono text-[11px] text-on-surface-variant font-bold">{ticket.issued_time || '--'}</td>
+                            <td className="px-6 py-4 font-bold">{ticket.service_name || '--'}</td>
+                            <td className="px-6 py-4 text-on-surface-variant font-medium">QL: {ticket.waiting_ahead ?? 0}</td>
+                            <td className="px-6 py-4 font-bold text-primary text-center text-sm">
+                              {ticket.estimated_wait !== null && ticket.estimated_wait !== undefined ? `${ticket.estimated_wait} mins` : '--'}
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-on-surface-variant">
+                              {actualWait !== null ? `${actualWait} mins` : '--'}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {status === 'Pending' ? (
+                                <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                  Pending
+                                </span>
+                              ) : status === 'Accurate' ? (
+                                <span className="px-3 py-1 rounded-full bg-[#dcfce7] text-[#15803d] text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                  Accurate
+                                </span>
+                              ) : status === 'Drift Detected' ? (
+                                <span className="px-3 py-1 rounded-full bg-[#ffe4e6] text-[#ba1a1a] text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                  Drift Detected
+                                </span>
+                              ) : status === 'No Show' ? (
+                                <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                  No Show
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                  No Data
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-outline font-semibold">
+                          No predictions yet. Register for a queue to see your history.
                         </td>
-                        {isAdmin && (
-                          <td className="px-6 py-4 text-center">
-                            <button 
-                              onClick={() => handleDelete(item.id)}
-                              className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer inline-flex items-center transition-colors"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        )}
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
             </section>
           </div>
 
-          {/* Audit History block ONLY for Admin */}
-          {isAdmin && (
-            <div className="bg-[#1C2C46] text-[#E2E8F0] p-6 rounded-2xl border border-outline-variant/40 shadow-sm space-y-3">
-              <h3 className="font-bold text-[#FFD700] text-sm flex items-center gap-1.5">
-                <Terminal className="w-5 h-5 text-[#FFD700] shrink-0" /> Machine Learning Engine Audit Trail
-              </h3>
-              <p className="text-xs text-blue-200/70 font-medium leading-relaxed">
-                Security actions, parameter tweaking logs, and database deletion histories are recorded locally for compliance audits.
-              </p>
-              
-              <div className="bg-black/30 p-3.5 rounded-xl border border-white/5 space-y-2 font-mono text-[10px] leading-relaxed max-h-40 overflow-y-auto">
-                {auditLogs.map((logStr, i) => (
-                  <div key={i} className="text-[#A0AEC0] border-l-2 border-[#FFD700] pl-2">
-                    {logStr}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/50 text-[10px] uppercase tracking-widest leading-loose">
-            SmartQ Predictive Engine v4.2.0 ΓÇó Powered by Enterprise ML Core
+            SmartQ Predictive Engine — Powered by live queue analytics
           </footer>
 
         </div>
@@ -3240,32 +3814,12 @@ const computedDuration = isModelActive
         <motion.div 
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="fixed bottom-24 right-8 bg-[#00081e] text-[#FFD700] text-xs font-bold px-4 py-3.5 rounded-xl shadow-2xl border border-white/10 z-50 flex items-center gap-2"
+          className="fixed bottom-8 right-8 bg-[#00081e] text-[#FFD700] text-xs font-bold px-4 py-3.5 rounded-xl shadow-2xl border border-white/10 z-50 flex items-center gap-2"
         >
           <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping"></span>
           <span>{toastMessage}</span>
         </motion.div>
       )}
-
-      {/* Recalibrate Model Floating Action Button */}
-      <button 
-        onClick={handleRecalibrate}
-        disabled={recalibrating}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-[#FFD05B] text-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all group z-50 hover:bg-[#ffe08f] active:bg-[#e6c364] cursor-pointer disabled:opacity-75 disabled:cursor-wait"
-      >
-        {recalibrating ? (
-          <motion.span 
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-            className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full"
-          />
-        ) : (
-          <Sparkles className="w-6 h-6" />
-        )}
-        <span className="absolute right-16 bg-[#00081e] text-white text-[11px] px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-white/10 font-bold">
-          Recalibrate Engine
-        </span>
-      </button>
 
     </div>
   );
@@ -3273,7 +3827,7 @@ const computedDuration = isModelActive
 
 // Screen 7: System Data Management
 export function SystemDataScreen() {
-  useAdminSecurity(['admin']);
+  useAdminSecurity(['manager', 'admin']);
   const navigate = useNavigate();
 
   // Core configuration engine parameters
@@ -3545,7 +4099,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-[#fed977]/30 text-[#755b00] shrink-0 flex items-center justify-center font-bold">
-                        ΓÖ┐
+                        ♿
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">Senior Citizens & Accessibility</p>
@@ -3569,7 +4123,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-blue-150 text-blue-700 shrink-0 flex items-center justify-center font-bold">
-                        ≡ƒÆÄ
+                        💎
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">VIP & Private Banking Tier</p>
@@ -3593,7 +4147,7 @@ export function SystemDataScreen() {
                   <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl transition-colors hover:bg-slate-100/60 duration-200">
                     <div className="flex items-center gap-3.5 pr-2">
                       <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 shrink-0 flex items-center justify-center font-bold">
-                        ΓÜí
+                        ⚡
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-extrabold text-primary">Quick Transaction Express</p>
@@ -3644,7 +4198,7 @@ export function SystemDataScreen() {
                     className="px-6 py-2.5 text-xs font-bold bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg shadow-sm font-semibold flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
                   >
                     {isSaving ? (
-                      <span className="animate-spin text-sm block">ΓÅ│</span>
+                      <span className="animate-spin text-sm block">◌</span>
                     ) : (
                       <Save className="w-3.5 h-3.5" />
                     )}
@@ -3720,7 +4274,7 @@ export function SystemDataScreen() {
 
           {/* Footer Branding */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Global Cluster Portal ΓÇó Security Tier Zero Access
+            SmartQ Global Cluster Portal — Security Tier Zero Access
           </footer>
 
         </div>
@@ -3951,7 +4505,7 @@ export function SystemIntegrationScreen() {
                     className="flex-1 sm:flex-none px-4 py-2.5 bg-[#00081e] hover:opacity-90 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
                   >
                     {isTesting ? (
-                      <span className="animate-spin">ΓÅ│</span>
+                      <span className="animate-spin">◌</span>
                     ) : (
                       <RefreshCw className="w-3.5 h-3.5" />
                     )}
@@ -3965,7 +4519,7 @@ export function SystemIntegrationScreen() {
                     className="flex-1 sm:flex-none px-4 py-2.5 bg-[#fed977] hover:bg-[#ffe08f] text-[#241a00] rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
                   >
                     {isSaving ? (
-                      <span className="animate-spin">ΓÅ│</span>
+                      <span className="animate-spin">◌</span>
                     ) : (
                       <Save className="w-3.5 h-3.5" />
                     )}
@@ -4118,7 +4672,7 @@ export function SystemIntegrationScreen() {
 
           {/* Footer lock bottom */}
           <footer className="pt-4 text-center text-on-surface-variant/40 text-[10px] uppercase tracking-widest leading-loose font-bold">
-            SmartQ Gateway Hub Core ΓÇó Branch Tunnel System
+            SmartQ Gateway Hub Core — Branch Tunnel System
           </footer>
 
         </div>

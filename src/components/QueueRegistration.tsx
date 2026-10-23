@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import NotificationBell from './NotificationBell';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6,7 +7,6 @@ import {
   Landmark, 
   LogOut, 
   ChevronRight, 
-  Bell, 
   ArrowRight, 
   ArrowLeft, 
   User as UserIcon, 
@@ -19,20 +19,52 @@ import {
   Info,
   Timer
 } from 'lucide-react';
+import { predictWaitRounded } from '../predictWait';
 
 export default function QueueRegistration() {
   const navigate = useNavigate();
 
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('cash_deposit');
+  const [regStep, setRegStep] = useState<1 | 2>(1);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [fullName, setFullName] = useState<string>('');
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [additionalNote, setAdditionalNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [serviceOptions, setServiceOptions] = useState<{ id: string; name: string; code: string | null; base_wait_minutes: number | null; description: string | null }[]>([]);
+  const [loadingServices, setLoadingServices] = useState<boolean>(true);
+  const [activeTicketGuard, setActiveTicketGuard] = useState<{ ticket_number: string; status: string } | null>(null);
   const userEmail = localStorage.getItem('userEmail') || '';
   const namePrefix = userEmail.split('@')[0];
+
+  useEffect(() => {
+    const loadServices = async () => {
+      const rows: { id: string; name: string; code: string | null; base_wait_minutes: number | null; description: string | null }[] = [];
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('services')
+          .select('id, name, code, base_wait_minutes, description')
+          .eq('status', 'active')
+          .order('code')
+          .order('name')
+          .range(from, from + 999);
+        if (error) {
+          console.error('Failed to load services:', error.message);
+          break;
+        }
+        const batch = (data ?? []) as typeof rows;
+        rows.push(...batch);
+        if (batch.length < 1000) break;
+        from += 1000;
+      }
+      setServiceOptions(rows);
+      setLoadingServices(false);
+    };
+    loadServices();
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -47,11 +79,36 @@ export default function QueueRegistration() {
 
       const role = profile?.role;
       if (!role) { navigate('/login'); return; }
-      if (role === 'staff') { navigate('/queue-control'); return; }
-      if (role === 'admin' || role === 'manager') { navigate('/admin'); return; }
+      if (role === 'staff') { navigate('/queue-control-center'); return; }
+      if (role === 'admin' || role === 'manager') { navigate('/admin-dashboard'); return; }
       if (role !== 'customer') { navigate('/login'); return; }
       setUserRole(role);
       setLoading(false);
+
+      // Auto-load customer profile details
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileData) {
+        setFullName(profileData.full_name || '');
+        setPhoneNumber(profileData.phone || '');
+      }
+
+      // Block if user already has an active ticket
+      const { data: activeRows, error: activeError } = await supabase
+        .from('queues')
+        .select('ticket_number, status')
+        .eq('user_id', session.user.id)
+        .in('status', ['waiting', 'serving'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (activeError) {
+        console.error('QueueRegistration: failed to check active ticket', activeError.message);
+      }
+      setActiveTicketGuard(activeRows?.[0] ?? null);
     });
   }, [navigate]);
 
@@ -63,82 +120,101 @@ export default function QueueRegistration() {
 
   if (userRole !== 'customer') return null;
 
-
-  const services = [
-    { id: 'cash_deposit', name: 'Cash Deposit', code: 'A', wait: 5, icon: 'payments', desc: 'Secure over-the-counter payments & currency updates' },
-    { id: 'cash_withdrawal', name: 'Cash Withdrawal', code: 'A', wait: 8, icon: 'atm', desc: 'Teller drawers with robust audit support' },
-    { id: 'account_opening', name: 'Account Opening', code: 'B', wait: 45, icon: 'person_add', desc: 'Check eligibility, open digital checking & credit cards' },
-    { id: 'loan_inquiry', name: 'Loan Inquiry', code: 'C', wait: 20, icon: 'monetization_on', desc: 'Rates, mortgage structures & consultation requests' },
-    { id: 'card_services', name: 'Card Services', code: 'D', wait: 12, icon: 'credit_card', desc: 'Issue replacements, unlock PINs & loyalty updates' },
-    { id: 'general_inquiry', name: 'General Inquiry', code: 'E', wait: 10, icon: 'contact_support', desc: 'Compliance status, feedback & information checks' }
-  ];
-
-  const currentSelectedService = services.find(s => s.id === selectedServiceId) || services[0];
+  const currentSelectedService = serviceOptions.find(s => s.id === selectedServiceId) || serviceOptions[0] || null;
 
   const handleNextStepFromService = () => setRegStep(2);
 
-  const handleConfirmDetails = () => {
-    if (!fullName.trim() || !phoneNumber.trim()) return;
-    setRegStep(3);
-  };
-
-  // ─── UPDATED: saves ticket to Supabase ───────────────────────────────────
   const handleIssueTicket = async () => {
-    setIsSubmitting(true);
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      navigate('/login');
+    if (!currentSelectedService) return;
+    if (activeTicketGuard) {
+      setSubmitError(`You already have an active ticket (${activeTicketGuard.ticket_number}).`);
       return;
     }
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    const generatedNum = `${currentSelectedService.code}-${Math.floor(100 + Math.random() * 900)}`;
-    const currentTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const waitingAhead = Math.floor(2 + Math.random() * 8);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const ticketData = {
-      ticket_number: generatedNum,
-      service_id: currentSelectedService.id,
-      service_name: currentSelectedService.name,
-      service_code: currentSelectedService.code,
-      customer_name: fullName,
-      phone: phoneNumber,
-      additional_note: additionalNote || null,
-      estimated_wait: currentSelectedService.wait,
-      waiting_ahead: waitingAhead,
-      status: 'waiting',
-      issued_time: currentTimeStr,
-      user_id: user.id,
-    };
+      if (!user) {
+        navigate('/login');
+        return;
+      }
 
-   const { error } = await supabase.from('queues').insert(ticketData);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
-if (error) {
-  alert('Failed to issue ticket: ' + error.message);
-  setIsSubmitting(false);
-  return;
-}
+      const { count: aheadCount, error: aheadError } = await supabase
+        .from('queues')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'waiting')
+        .gte('created_at', startOfToday.toISOString());
+      if (aheadError) {
+        console.error('Failed to count waiting tickets:', aheadError.message);
+        setSubmitError('Could not determine the current queue length. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+      const peopleAhead = aheadCount ?? 0;
 
-    // Also save to localStorage so CustomerDashboard can read it immediately
-    localStorage.setItem('activeTicket', JSON.stringify({
-      number: generatedNum,
-      service: currentSelectedService.name,
-      waitingAhead,
-      estimatedWait: currentSelectedService.wait,
-      status: 'Waiting',
-      customerName: fullName,
-      phone: phoneNumber,
-      issuedTime: currentTimeStr,
-    }));
+      const { count: activeCounterCount, error: counterError } = await supabase
+        .from('counters')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active');
+      if (counterError) {
+        console.error('Failed to count active counters:', counterError.message);
+      }
+      const activeCounters = Math.max(1, activeCounterCount ?? 0);
 
-    setIsSubmitting(false);
-    navigate('/customer-dashboard');
+      const estimated = predictWaitRounded({
+        baseWait: currentSelectedService.base_wait_minutes,
+        peopleAhead,
+        activeCounters,
+      });
+
+      const { data: ticket, error } = await supabase.rpc('issue_ticket', {
+        p_service_id: currentSelectedService.id,
+        p_note: additionalNote || null,
+        p_estimated_wait: estimated,
+      });
+
+      if (error) {
+        console.error('Failed to issue ticket:', error.message);
+        setSubmitError(error.message);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!ticket) {
+        console.error('issue_ticket returned no row');
+        setSubmitError('Failed to issue ticket. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      localStorage.setItem('activeTicket', JSON.stringify({
+        number: ticket.ticket_number,
+        service: ticket.service_name,
+        waitingAhead: ticket.waiting_ahead,
+        estimatedWait: ticket.estimated_wait,
+        status: 'Waiting',
+        customerName: ticket.customer_name,
+        phone: ticket.phone,
+        issuedTime: ticket.issued_time,
+      }));
+
+      setIsSubmitting(false);
+      navigate('/customer-dashboard');
+    } catch (err) {
+      console.error('QueueRegistration: failed to issue ticket', err);
+      setSubmitError('Failed to issue ticket. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.clear();
+    localStorage.removeItem('activeTicket');
     navigate('/login');
   };
 
@@ -231,13 +307,7 @@ if (error) {
         </div>
         
         <div className="flex items-center gap-4">
-          <button 
-            type="button"
-            className="relative p-2 text-on-surface-variant hover:text-secondary transition-colors active:opacity-80 rounded-lg cursor-pointer"
-          >
-            <Bell className="w-5 h-5 text-on-surface-variant" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full" />
-          </button>
+          <NotificationBell />
 
           <div className="h-8 w-[1px] bg-outline-variant/50" />
 
@@ -262,26 +332,45 @@ if (error) {
         >
           {/* Wizard Steps */}
           <div className="flex items-center justify-between mb-8 pb-6 border-b border-outline-variant/60">
-            {[1, 2, 3].map((step) => (
-              <div key={step} className="flex items-center gap-3 flex-1 last:flex-initial">
+            {[
+              { num: 1, label: 'Select Service' },
+              { num: 2, label: 'Verify & Ticket' }
+            ].map((step, idx, arr) => (
+              <div key={step.num} className="flex items-center gap-3 flex-1 last:flex-initial">
                 <div className={`w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all ${
-                  regStep === step 
-                    ? 'bg-secondary-container border border-secondary text-[#584400] scale-[1.05]' 
-                    : regStep > step 
-                      ? 'bg-green-100 text-green-700' 
-                      : 'bg-surface-container-low border border-outline-variant/30 text-outline'
+                  regStep === step.num
+                    ? 'bg-secondary-container border border-secondary text-[#584400] scale-[1.05]'
+                    : regStep > step.num
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-surface-container-low border border-outline-variant/30 text-outline'
                 }`}>
-                  {regStep > step ? '✓' : step}
+                  {regStep > step.num ? '✓' : step.num}
                 </div>
-                <span className={`text-xs font-bold ${regStep === step ? 'text-primary' : 'text-outline'}`}>
-                  {step === 1 ? 'Select Service' : step === 2 ? 'Customer Details' : 'Verify & Ticket'}
+                <span className={`text-xs font-bold ${regStep === step.num ? 'text-primary' : 'text-outline'}`}>
+                  {step.label}
                 </span>
-                {step < 3 && <ChevronRight className="w-4 h-4 text-outline/35 flex-grow" />}
+                {idx < arr.length - 1 && (
+                  <ChevronRight className="w-4 h-4 text-outline/35 flex-grow" />
+                )}
               </div>
             ))}
           </div>
 
           <AnimatePresence mode="wait">
+            {activeTicketGuard && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p className="text-[11px] text-amber-800 font-semibold">
+                  You already have an active ticket ({activeTicketGuard.ticket_number}). Cancel it from your dashboard or wait until it is finished.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/customer-dashboard')}
+                  className="px-4 py-2 bg-secondary-container text-[#584400] hover:bg-secondary hover:text-on-secondary font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            )}
             {regStep === 1 && (
               <motion.div
                 key="step-service"
@@ -296,8 +385,16 @@ if (error) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {services.map((item) => {
-                    const isSelected = selectedServiceId === item.id;
+                  {loadingServices ? (
+                    <p className="text-xs font-medium text-on-surface-variant animate-pulse col-span-full py-8 text-center">
+                      Loading services...
+                    </p>
+                  ) : serviceOptions.length === 0 ? (
+                    <p className="text-xs font-medium text-on-surface-variant col-span-full py-8 text-center">
+                      No services are available right now. Please try again later.
+                    </p>
+                  ) : serviceOptions.map((item) => {
+                    const isSelected = currentSelectedService?.id === item.id;
                     return (
                       <button
                         key={item.id}
@@ -310,16 +407,22 @@ if (error) {
                         }`}
                       >
                         <div className="flex justify-between items-start w-full">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                            isSelected ? 'bg-secondary-container text-[#584400]' : 'bg-surface-container border border-outline-variant/40 text-outline'
-                          }`}>
-                            Est. Wait: {item.wait} mins
-                          </span>
-                          <span className="text-lg font-bold text-secondary font-mono">{item.code} Queue</span>
+                          {item.base_wait_minutes !== null && (
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                              isSelected ? 'bg-secondary-container text-[#584400]' : 'bg-surface-container border border-outline-variant/40 text-outline'
+                            }`}>
+                              Est. Wait: {item.base_wait_minutes} mins
+                            </span>
+                          )}
+                          {item.code && (
+                            <span className="text-lg font-bold text-secondary font-mono">{item.code} Queue</span>
+                          )}
                         </div>
                         <div>
                           <h4 className="font-bold text-primary text-sm leading-snug mb-1">{item.name}</h4>
-                          <p className="text-[11px] text-on-surface-variant leading-relaxed opacity-85">{item.desc}</p>
+                          {item.description && (
+                            <p className="text-[11px] text-on-surface-variant leading-relaxed opacity-85">{item.description}</p>
+                          )}
                         </div>
                       </button>
                     );
@@ -330,7 +433,8 @@ if (error) {
                   <button
                     type="button"
                     onClick={handleNextStepFromService}
-                    className="px-6 py-3 bg-secondary-container hover:bg-secondary text-[#584400] hover:text-on-secondary font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-[0.98] transition-all cursor-pointer"
+                    disabled={!currentSelectedService || !!activeTicketGuard}
+                    className="px-6 py-3 bg-secondary-container hover:bg-secondary text-[#584400] hover:text-on-secondary font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <span>Proceed to Details</span>
                     <ArrowRight className="w-4 h-4" />
@@ -340,95 +444,6 @@ if (error) {
             )}
 
             {regStep === 2 && (
-              <motion.div
-                key="step-details"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
-                <div>
-                  <h3 className="text-xl font-bold text-primary mb-1">Enter Customer Information</h3>
-                  <p className="text-xs text-on-surface-variant font-medium">Please provide your matching details for this ticket:</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-on-surface-variant" htmlFor="fullName">
-                      Your Full Name
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-outline group-focus-within:text-secondary transition-colors">
-                        <UserIcon className="w-[18px] h-[18px]" />
-                      </div>
-                      <input
-                        id="fullName"
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder=""
-                        className="block w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-on-surface-variant" htmlFor="phoneNumber">
-                      Your Contact Mobile Number
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-outline group-focus-within:text-secondary transition-colors">
-                        <Phone className="w-[18px] h-[18px]" />
-                      </div>
-                      <input
-                        id="phoneNumber"
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder=""
-                        className="block w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-on-surface-variant" htmlFor="additionalNote">
-                      Additional Instruction or Service Request (Optional)
-                    </label>
-                    <textarea
-                      id="additionalNote"
-                      rows={3}
-                      value={additionalNote}
-                      onChange={(e) => setAdditionalNote(e.target.value)}
-                      placeholder=""
-                      className="block w-full p-4 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm resize-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between pt-4 border-t border-outline-variant/40">
-                  <button
-                    type="button"
-                    onClick={() => setRegStep(1)}
-                    className="px-5 py-3 border border-outline-variant/60 text-outline font-bold text-xs rounded-xl flex items-center gap-1.5 hover:bg-surface-container transition-all cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Category</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!fullName.trim() || !phoneNumber.trim()}
-                    onClick={handleConfirmDetails}
-                    className="px-6 py-3 bg-secondary-container hover:bg-secondary text-[#584400] hover:text-on-secondary font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <span>Proceed to Verification</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {regStep === 3 && (
               <motion.div
                 key="step-complete"
                 initial={{ opacity: 0, x: 20 }}
@@ -441,6 +456,23 @@ if (error) {
                   <p className="text-xs text-on-surface-variant font-medium">Please review details before joining the real-time queue:</p>
                 </div>
 
+                {(!fullName || !phoneNumber) && (
+                  <div className="flex items-start gap-2.5 text-[11px] text-amber-700 font-medium bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl mb-4">
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span>
+                      Your profile is missing some details. Please{' '}
+                      <button
+                        type="button"
+                        onClick={() => navigate('/my-profile')}
+                        className="font-bold underline cursor-pointer"
+                      >
+                        update your profile
+                      </button>
+                      {' '}before registering for a queue.
+                    </span>
+                  </div>
+                )}
+
                 <div className="bg-surface-container border border-outline-variant/60 rounded-2xl p-6 space-y-4">
                   <div className="flex justify-between pb-3 border-b border-outline-variant/40">
                     <span className="text-xs text-outline font-bold">Selected Banking Service</span>
@@ -448,11 +480,17 @@ if (error) {
                   </div>
                   <div className="flex justify-between pb-3 border-b border-outline-variant/40">
                     <span className="text-xs text-outline font-bold">Register Candidate</span>
-                    <span className="text-xs font-bold text-primary">{fullName}</span>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-primary block">{fullName || 'Not set'}</span>
+                      <span className="text-[10px] text-outline font-medium">From your account profile</span>
+                    </div>
                   </div>
                   <div className="flex justify-between pb-3 border-b border-outline-variant/40">
                     <span className="text-xs text-outline font-bold">Verified Contact</span>
-                    <span className="text-xs font-bold text-primary">{phoneNumber}</span>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-primary block">{phoneNumber || 'Not set'}</span>
+                      <span className="text-[10px] text-outline font-medium">From your account profile</span>
+                    </div>
                   </div>
                   {additionalNote.trim() && (
                     <div className="pb-3 border-b border-outline-variant/40">
@@ -462,27 +500,47 @@ if (error) {
                       </p>
                     </div>
                   )}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-on-surface-variant" htmlFor="additionalNote">
+                      Additional Instruction or Service Request
+                      <span className="text-outline font-medium ml-1">(Optional)</span>
+                    </label>
+                    <textarea
+                      id="additionalNote"
+                      rows={2}
+                      value={additionalNote}
+                      onChange={(e) => setAdditionalNote(e.target.value)}
+                      placeholder="Any specific request for the counter staff..."
+                      className="block w-full p-3 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/70 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm resize-none"
+                    />
+                  </div>
                   <div className="flex items-start gap-2.5 text-[11px] text-on-surface-variant font-medium bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl">
                     <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <span>
-                      Virtual queue ticket allocations are live. By issuing this token, SMS alerts will update position shifts.
+                      Virtual queue ticket allocations are live. By issuing this token, Keep this app open to get alerts when your turn is near.
                     </span>
                   </div>
+
+                  {submitError && (
+                    <div className="text-[11px] text-red-700 font-semibold bg-red-50 border border-red-200 p-3.5 rounded-xl">
+                      {submitError}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-between pt-4 border-t border-outline-variant/40">
                   <button
                     type="button"
-                    onClick={() => setRegStep(2)}
+                    onClick={() => setRegStep(1)}
                     className="px-5 py-3 border border-outline-variant/60 text-outline font-bold text-xs rounded-xl flex items-center gap-1.5 hover:bg-surface-container transition-all cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Info</span>
+                    <span>Back to Service</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleIssueTicket}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !fullName || !phoneNumber || !currentSelectedService || !!activeTicketGuard}
                     className="px-6 py-3 bg-secondary-container hover:bg-secondary text-[#584400] hover:text-on-secondary font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <Sparkles className="w-4 h-4 text-[#584400]" />

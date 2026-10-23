@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Landmark, Lock } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -8,6 +8,7 @@ import LoginScreen from './components/LoginScreen';
 import StaffLoginScreen from './components/StaffLoginScreen';
 import RegisterScreen from './components/RegisterScreen';
 import ForgotPasswordScreen from './components/ForgotPasswordScreen';
+import ResetPasswordScreen from './components/ResetPasswordScreen';
 
 // Core Role-Protected Dashboards & Shared UI
 import CustomerDashboard from './components/CustomerDashboard';
@@ -24,9 +25,7 @@ import {
   CounterManagementScreen,
   ServiceManagementScreen,
   UserManagementScreen,
-  WaitTimePredictionScreen,
-  SystemDataScreen,
-  SystemIntegrationScreen
+  WaitTimePredictionScreen
 } from './components/AdminSubPages';
 
 // ─── Protected Route ────────────────────────────────────────────────────────
@@ -35,9 +34,37 @@ interface ProtectedRouteProps {
   allowedRoles?: string[];
 }
 
+const IDLE_MINUTES = 30;
+
+function useIdleLogout(enabled: boolean, minutes: number) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!enabled) return;
+    let timeout: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(async () => {
+        try {
+          await supabase.auth.signOut();
+        } catch {}
+        navigate('/staff-login');
+      }, minutes * 60 * 1000);
+    };
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timeout);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
+  }, [enabled, minutes, navigate]);
+}
+
 function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -54,9 +81,10 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
         .eq('id', session.user.id)
         .single();
 
-      const role = profile?.role as string | undefined;
+      const userRole = profile?.role as string | undefined;
+      setRole(userRole ?? null);
 
-      if (!allowedRoles || (role && allowedRoles.includes(role))) {
+      if (!allowedRoles || (userRole && allowedRoles.includes(userRole))) {
         setAllowed(true);
       } else {
         setAllowed(false);
@@ -65,6 +93,8 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
       setChecking(false);
     });
   }, []);
+
+  useIdleLogout(role === 'staff' || role === 'manager' || role === 'admin', IDLE_MINUTES);
 
   if (checking) {
     return (
@@ -75,7 +105,13 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   }
 
   if (!allowed) {
-    return <Navigate to="/login" replace />;
+    if (!role) {
+      return allowedRoles && allowedRoles.includes('customer') ? <Navigate to="/login" replace /> : <Navigate to="/staff-login" replace />;
+    }
+    if (role === 'customer') return <Navigate to="/customer-dashboard" replace />;
+    if (role === 'staff') return <Navigate to="/queue-control-center" replace />;
+    if (role === 'manager' || role === 'admin') return <Navigate to="/admin-dashboard" replace />;
+    return allowedRoles && allowedRoles.includes('customer') ? <Navigate to="/login" replace /> : <Navigate to="/staff-login" replace />;
   }
 
   return <>{children}</>;
@@ -115,9 +151,6 @@ function AuthLayout({ children, isStaff }: AuthLayoutProps) {
               <span className="text-[#fed977] text-xs font-bold uppercase tracking-wider block mb-5">
                 Authorized Personnel Only
               </span>
-              <p className="text-blue-100/60 font-light text-sm leading-relaxed">
-                This portal is restricted to authorized SmartQ Banking employees only. Unauthorized access is strictly prohibited.
-              </p>
             </>
           ) : (
             <>
@@ -132,25 +165,12 @@ function AuthLayout({ children, isStaff }: AuthLayoutProps) {
           )}
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 text-xs text-blue-100/40 uppercase font-semibold tracking-wider">
-            <span className="w-5 h-5 rounded-full border border-blue-100/20 flex items-center justify-center text-[10px] text-secondary-container">✓</span>
-            <span>ISO 27001 Certified Security</span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-blue-100/40 uppercase font-semibold tracking-wider">
-            <span className="w-5 h-5 rounded-full border border-blue-100/20 flex items-center justify-center text-[10px] text-secondary-container">✓</span>
-            <span>Real-time Analytics Dashboard</span>
-          </div>
-        </div>
       </div>
 
       {/* Right Form Area */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 self-center h-full min-h-screen">
         <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
         {children}
-        <div className="absolute bottom-6 text-blue-100/25 text-[10px] uppercase tracking-[0.2em] font-bold select-none text-center">
-          SmartQ Banking Suite v4.2.1-Enterprise
-        </div>
       </div>
     </div>
   );
@@ -200,6 +220,8 @@ function AppRoutes() {
         }
       />
 
+      <Route path="/reset-password" element={<ResetPasswordScreen />} />
+
       {/* Customer-only routes */}
       <Route path="/customer-dashboard" element={
         <ProtectedRoute allowedRoles={['customer']}>
@@ -212,7 +234,7 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/status-monitoring" element={
-        <ProtectedRoute allowedRoles={['customer']}>
+        <ProtectedRoute allowedRoles={['customer', 'staff', 'manager']}>
           <StatusMonitoring />
         </ProtectedRoute>
       } />
@@ -231,22 +253,22 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/analytics" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
+        <ProtectedRoute allowedRoles={['staff', 'manager']}>
           <AnalyticsScreen />
         </ProtectedRoute>
       } />
       <Route path="/reports" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
+        <ProtectedRoute allowedRoles={['manager']}>
           <ReportsScreen />
         </ProtectedRoute>
       } />
       <Route path="/counter-management" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
+        <ProtectedRoute allowedRoles={['admin']}>
           <CounterManagementScreen />
         </ProtectedRoute>
       } />
       <Route path="/service-management" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
+        <ProtectedRoute allowedRoles={['admin']}>
           <ServiceManagementScreen />
         </ProtectedRoute>
       } />
@@ -256,18 +278,8 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/wait-time-prediction" element={
-        <ProtectedRoute allowedRoles={['manager', 'admin']}>
+        <ProtectedRoute allowedRoles={['customer']}>
           <WaitTimePredictionScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/system-data-management" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <SystemDataScreen />
-        </ProtectedRoute>
-      } />
-      <Route path="/system-integration" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <SystemIntegrationScreen />
         </ProtectedRoute>
       } />
 

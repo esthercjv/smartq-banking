@@ -116,18 +116,8 @@ if (userRole === 'staff') {
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border-2 border-[#fed977]/30 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#fed977] via-[#e5c158] to-[#fed977]" />
 
-        {/* Security Badge */}
-        <div className="mb-6 flex flex-col items-center justify-center text-center">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error-container/25 border border-error/20 text-[11px] font-bold text-error uppercase tracking-wider mb-2">
-            <Lock className="w-3 h-3" /> Restricted Access
-          </span>
-          <p className="text-[11px] text-red-400 font-semibold leading-normal">
-            Unauthorized access attempts are logged and monitored
-          </p>
-        </div>
-
-        <h2 className="text-[24px] font-semibold text-primary mb-1">Staff Access</h2>
-        <p className="text-[13px] text-on-surface-variant mb-6">Enter your employee credentials</p>
+        <h2 className="text-[24px] font-semibold text-primary mb-1 text-center">Staff Access</h2>
+        <p className="text-[13px] text-on-surface-variant mb-6 text-center">Enter your employee credentials</p>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Employee ID Input */}

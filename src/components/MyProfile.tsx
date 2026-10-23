@@ -5,7 +5,6 @@ import { motion } from 'motion/react';
 import { 
   Landmark, 
   LogOut, 
-  Bell, 
   LayoutDashboard,
   UserCheck,
   Activity,
@@ -17,6 +16,8 @@ import {
   CheckCircle2,
   Timer
 } from 'lucide-react';
+import StaffNotificationBell from './StaffNotificationBell';
+import ManagementNotificationBell from './ManagementNotificationBell';
 
 export default function MyProfile() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function MyProfile() {
   const [phone, setPhone] = useState('');
   const [department, setDepartment] = useState('');
   const [successMsg, setSuccessMsg] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,10 +80,13 @@ export default function MyProfile() {
     .eq('id', user.id);
 
   if (error) {
-    alert('Failed to save profile: ' + error.message);
+    console.error('Failed to save profile:', error.message);
+    setErrorMsg('Failed to save profile: ' + error.message);
+    setTimeout(() => setErrorMsg(null), 5000);
     return;
   }
 
+  setErrorMsg(null);
   setSuccessMsg(true);
   setTimeout(() => setSuccessMsg(false), 3000);
 };
@@ -210,15 +215,6 @@ export default function MyProfile() {
               <span>Status Monitoring</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/wait-time-prediction')}
-              className="flex items-center gap-3 p-3 text-on-primary-fixed-variant hover:bg-white/5 rounded-xl font-medium text-blue-100/60 text-xs text-left transition-colors cursor-pointer"
-            >
-              <Timer className="w-4 h-4 shrink-0" />
-              <span>Wait Time Prediction</span>
-            </button>
-
             <div className="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -266,42 +262,46 @@ export default function MyProfile() {
               className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
             >
               <LayoutDashboard className="w-4 h-4 shrink-0" />
-              <span>Admin Dashboard</span>
+              <span>Dashboard</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/status-monitoring')}
-              className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
-            >
-              <Activity className="w-4 h-4 shrink-0" />
-              <span>Status Monitoring</span>
-            </button>
+            {!isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('/status-monitoring')}
+                  className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-primary-fixed-variant hover:bg-white/5 text-blue-100/60"
+                >
+                  <Activity className="w-4 h-4 shrink-0" />
+                  <span>Status Monitoring</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/analytics')}
-              className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
-            >
-              <span>Analytics</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/analytics')}
+                  className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
+                >
+                  <span>Analytics</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/reports')}
-              className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
-            >
-              <span>Reports</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/reports')}
+                  className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
+                >
+                  <span>Reports</span>
+                </button>
+              </>
+            )}
 
             {isAdmin && (
               <>
                 <button
                   type="button"
-                  onClick={() => navigate('/counter-management')}
+                  onClick={() => navigate('/user-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
                 >
-                  <span>Counter Management</span>
+                  <span>User Management</span>
                 </button>
                 <button
                   type="button"
@@ -312,37 +312,10 @@ export default function MyProfile() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate('/user-management')}
+                  onClick={() => navigate('/counter-management')}
                   className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
                 >
-                  <span>User Management</span>
-                </button>
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={() => navigate('/wait-time-prediction')}
-              className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
-            >
-              <span>Wait Time Prediction</span>
-            </button>
-
-            {isAdmin && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => navigate('/system-data-management')}
-                  className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
-                >
-                  <span>System Data</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/system-integration')}
-                  className="flex items-center gap-2.5 p-2 rounded-lg font-medium text-blue-100/60 hover:bg-white/5 text-xs text-left"
-                >
-                  <span>System Integration</span>
+                  <span>Counter Management</span>
                 </button>
               </>
             )}
@@ -351,7 +324,7 @@ export default function MyProfile() {
               <button
                 type="button"
                 onClick={() => navigate('/my-profile')}
-                className="flex items-center gap-3 p-3 rounded-xl font-semibold text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-secondary-container bg-secondary-container shadow-md"
+                className="flex items-center gap-2.5 p-2 rounded-lg font-semibold text-xs text-left transition-all active:scale-[0.98] cursor-pointer text-on-secondary-container bg-secondary-container shadow-sm"
               >
                 <SettingsIcon className="w-4 h-4 shrink-0" />
                 <span>My Profile</span>
@@ -387,14 +360,18 @@ export default function MyProfile() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            className="p-2 text-on-surface-variant hover:text-secondary rounded-lg"
-          >
-            <Bell className="w-5 h-5" />
-          </button>
+          {!isCustomer && (
+            isStaff ? (
+              <StaffNotificationBell buttonClassName="p-2 text-on-surface-variant hover:text-secondary rounded-lg" />
+            ) : (
+              <ManagementNotificationBell
+                role={userRole === 'admin' ? 'admin' : 'manager'}
+                buttonClassName="p-2 text-on-surface-variant hover:text-secondary rounded-lg"
+              />
+            )
+          )}
 
-          <div className="h-8 w-[1px] bg-outline-variant/50" />
+          {!isCustomer && <div className="h-8 w-[1px] bg-outline-variant/50" />}
 
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -509,6 +486,12 @@ export default function MyProfile() {
               <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 p-3 rounded-xl text-xs font-semibold">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Account profile changes validated & stored successfully!</span>
+              </div>
+            )}
+
+            {errorMsg && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs font-semibold">
+                <span>{errorMsg}</span>
               </div>
             )}
 

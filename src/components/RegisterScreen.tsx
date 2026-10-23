@@ -7,18 +7,38 @@ interface RegisterScreenProps {
   onNavigate: (route: string) => void;
 }
 
+function validatePassword(pw: string): string | null {
+  if (pw.length < 8) return 'Password must be at least 8 characters long.';
+  if (!/[a-zA-Z]/.test(pw)) return 'Password must contain at least one letter.';
+  if (!/[0-9]/.test(pw)) return 'Password must contain at least one number.';
+  return null;
+}
+
 export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const role = 'customer'; // Always register as customer, admins assign roles
   const [isDone, setIsDone] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const passwordError = validatePassword(password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
-    if (!fullName || !email || !password) return;
+    if (!fullName || !email || !password) {
+      setErrorMessage('Please fill in every field.');
+      return;
+    }
+
+    const pwError = validatePassword(password);
+    if (pwError) {
+      setErrorMessage(pwError);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -29,23 +49,25 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
         options: {
           data: {
             full_name: fullName,
-            role: role,
           },
         },
       });
 
-      console.log('Signup data:', data);
-      console.log('Signup error:', error);
-
       if (error) {
-        alert(error.message);
+        console.error('Registration failed:', error.message);
+        setErrorMessage(error.message);
         return;
       }
 
+      setSuccessMessage(
+        data.session
+          ? 'You can now log in'
+          : 'Check your email to confirm your account, then log in.'
+      );
       setIsDone(true);
     } catch (err) {
-      console.error(err);
-      alert('Registration failed. Please try again.');
+      console.error('Registration failed:', err);
+      setErrorMessage('Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +97,7 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border border-white/5 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-secondary-container" />
 
-        <h2 className="text-[24px] font-semibold text-primary mb-5">Create Account</h2>
+        <h2 className="text-[24px] font-semibold text-primary mb-5 text-center">Create Account</h2>
 
         {!isDone ? (
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -140,12 +162,22 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
                   className="block w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl font-medium text-on-surface placeholder:text-outline-variant/90 focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all text-sm"
                 />
               </div>
+              <p className="text-[11px] text-on-surface-variant font-medium ml-0.5">
+                At least 8 characters, with a letter and a number.
+              </p>
+              {password.length > 0 && passwordError && (
+                <p className="text-[11px] text-error font-semibold ml-0.5">{passwordError}</p>
+              )}
             </div>
+
+            {errorMessage && (
+              <p className="text-xs text-error font-semibold">{errorMessage}</p>
+            )}
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !!passwordError}
               className="w-full py-4 bg-secondary-container hover:bg-secondary transition-all text-[#584400] hover:text-white font-semibold rounded-xl shadow-md cursor-pointer active:scale-[0.98] transform flex items-center justify-center gap-2 mt-2"
             >
               {isLoading ? (
@@ -166,7 +198,7 @@ export default function RegisterScreen({ onNavigate }: RegisterScreenProps) {
             </div>
             <h3 className="font-bold text-primary text-base">Registration Complete</h3>
             <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
-              Your <strong>{role}</strong> profile (<strong>{email}</strong>) has been successfully created. You can now use these credentials to log in.
+              Your account (<strong>{email}</strong>) has been created. {successMessage}
             </p>
             <button
               onClick={() => onNavigate('/')}

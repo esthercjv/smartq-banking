@@ -1,21 +1,20 @@
 import { supabase } from '../supabaseClient';
+import NotificationBell from './NotificationBell';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Landmark, 
-  Clock, 
   LogOut, 
-  Ticket, 
-  CheckCircle2, 
-  Bell, 
-  Armchair, 
+  CheckCircle2,
+  Armchair,
   QrCode, 
   LayoutDashboard,
   UserCheck,
   Activity,
   Settings as SettingsIcon,
-  Timer
+  Timer,
+  Clock
 } from 'lucide-react';
 
 export default function CustomerDashboard() {
@@ -23,13 +22,15 @@ export default function CustomerDashboard() {
   const [verifiedRole, setVerifiedRole] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState('');
   const [loading, setLoading] = useState(true);
-  const [namePrefix, setNamePrefix] = useState('');
+  const [fullName, setFullName] = useState('');
   const [activeTicket, setActiveTicket] = useState<any>(null);
-  const [liveNowServing, setLiveNowServing] = useState({
-    number: '72',
-    counter: 'Counter 2',
-    service: 'Cash Withdrawal'
-  });
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [liveNowServing, setLiveNowServing] = useState<{
+    number: string;
+    counter: string;
+    service: string;
+  } | null>(null);
 
   useEffect(() => {
     const verifySession = async () => {
@@ -41,7 +42,7 @@ export default function CustomerDashboard() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, email')
+        .select('role, email, full_name')
         .eq('id', session.user.id)
         .single();
 
@@ -61,13 +62,53 @@ export default function CustomerDashboard() {
       }
 
       setVerifiedRole(profile.role);
-      setNamePrefix(profile.email?.split('@')[0] ?? '');
+      setFullName(profile.full_name ?? '');
       setVerifiedEmail(profile.email ?? '');
       setLoading(false);
     };
 
     verifySession();
   }, [navigate]);
+
+  useEffect(() => {
+    const loadNowServing = async () => {
+      const { data, error } = await supabase
+        .from('queues')
+        .select('*')
+        .eq('status', 'serving')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data && !error) {
+        setLiveNowServing({
+          number: data.ticket_number,
+          counter: data.counter_id ? `Counter ${data.counter_id}` : 'Counter',
+          service: data.service_name || 'Banking Service',
+        });
+      } else {
+        setLiveNowServing(null);
+      }
+    };
+
+    loadNowServing();
+
+    // Real-time subscription — updates instantly when queue changes
+    const channel = supabase
+      .channel('now-serving-live')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'queues'
+      }, () => {
+        loadNowServing();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => {
     const loadTicket = async () => {
@@ -99,39 +140,208 @@ export default function CustomerDashboard() {
           phone: row.phone,
           issuedTime: row.issued_time,
           id: row.id,
+          created_at: row.created_at,
         });
+        return;
       }
+      setActiveTicket(null);
+      localStorage.removeItem('activeTicket');
     };
     loadTicket();
   }, []);
 
   useEffect(() => {
-    const originalServingTickets = ['72', 'A-108', 'B-240', 'C-114', 'D-302', 'E-019'];
-    const counters = ['Counter 2', 'Counter 1', 'Counter 4', 'Counter 3', 'Counter 5', 'Counter 6'];
-    const servicesList = ['Cash Withdrawal', 'Cheque Deposit', 'Account Setup', 'Loan Advice', 'Card Setup', 'Enquiry Desk'];
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-    const interval = setInterval(() => {
-      const idx = Math.floor(Math.random() * originalServingTickets.length);
-      setLiveNowServing({
-        number: originalServingTickets[idx],
-        counter: counters[idx],
-        service: servicesList[idx],
-      });
-    }, 8500);
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel('customer-dashboard-ticket')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'queues',
+          filter: `user_id=eq.${user.id}`,
+        }, () => {
+          const loadTicket = async () => {
+            const { data } = await supabase
+              .from('queues')
+              .select('*')
+              .eq('user_id', user.id)
+              .in('status', ['waiting', 'serving'])
+              .order('created_at', { ascending: false })
+              .limit(1);
+            if (data && data.length > 0) {
+              const row = data[0];
+              setActiveTicket({
+                number: row.ticket_number,
+                service: row.service_name,
+                waitingAhead: row.waiting_ahead,
+                estimatedWait: row.estimated_wait,
+                status: row.status,
+                customerName: row.customer_name,
+                phone: row.phone,
+                issuedTime: row.issued_time,
+                id: row.id,
+                created_at: row.created_at,
+              });
+            } else {
+              setActiveTicket(null);
+              localStorage.removeItem('activeTicket');
+            }
+          };
+          loadTicket();
+        })
+        .subscribe();
+    });
 
-    return () => clearInterval(interval);
+    interval = setInterval(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('queues')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['waiting', 'serving'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) {
+        const row = data[0];
+        // live waiting ahead count
+        if (row.status === 'waiting') {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          const { count } = await supabase
+            .from('queues')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'waiting')
+            .gte('created_at', startOfToday.toISOString())
+            .lt('created_at', row.created_at);
+          setActiveTicket({
+            number: row.ticket_number,
+            service: row.service_name,
+            waitingAhead: count ?? 0,
+            estimatedWait: row.estimated_wait,
+            status: row.status,
+            customerName: row.customer_name,
+            phone: row.phone,
+            issuedTime: row.issued_time,
+            id: row.id,
+            created_at: row.created_at,
+          });
+        } else {
+          setActiveTicket({
+            number: row.ticket_number,
+            service: row.service_name,
+            waitingAhead: row.waiting_ahead,
+            estimatedWait: row.estimated_wait,
+            status: row.status,
+            customerName: row.customer_name,
+            phone: row.phone,
+            issuedTime: row.issued_time,
+            id: row.id,
+            created_at: row.created_at,
+          });
+        }
+      } else {
+        setActiveTicket(null);
+        localStorage.removeItem('activeTicket');
+      }
+    }, 10000);
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      if (interval) clearInterval(interval);
+    };
   }, []);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const loadNotifications = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('queues')
+        .select('ticket_number, status, service_name, estimated_wait')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (data && data.length > 0) {
+        const notifs = data.map(ticket => ({
+          id: ticket.ticket_number,
+          message: ticket.status === 'serving'
+            ? `Your ticket ${ticket.ticket_number} is now being served! Please proceed to the counter.`
+            : ticket.status === 'waiting'
+            ? `Your ticket ${ticket.ticket_number} for ${ticket.service_name} is in queue. Est. wait: ${ticket.estimated_wait} mins.`
+            : ticket.status === 'no_show'
+            ? `Your ticket ${ticket.ticket_number} was marked as no-show.`
+            : ticket.status === 'cancelled'
+            ? `Your ticket ${ticket.ticket_number} was cancelled.`
+            : `Your ticket ${ticket.ticket_number} has been completed.`,
+          status: ticket.status,
+          isNew: ticket.status === 'serving',
+        }));
+        setNotifications(notifs);
+      }
+    };
+
+    loadNotifications();
+
+    // Real-time — notify customer when their ticket status changes
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel('customer-notifications')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'queues',
+          filter: `user_id=eq.${user.id}`
+        }, (payload: any) => {
+          loadNotifications();
+          if (payload.new.status === 'serving') {
+            setShowNotifications(true); // auto-open when called
+          }
+        })
+        .subscribe();
+    });
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const unreadCount = notifications.filter(n => n.isNew).length;
+
+  const firstName = (fullName || verifiedEmail.split('@')[0]).split(' ')[0];
+  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
   const handleCancelTicket = async () => {
     if (!activeTicket?.id) return;
-    await supabase.from('queues').delete().eq('id', activeTicket.id);
+    const { data: cancelled, error } = await supabase
+      .from('queues')
+      .update({ status: 'cancelled', completed_at: new Date().toISOString() })
+      .eq('id', activeTicket.id)
+      .eq('status', 'waiting')
+      .select();
+
+    if (error || !cancelled || cancelled.length === 0) {
+      alert('Could not cancel. Your ticket may already have been called.');
+      return;
+    }
+
     localStorage.removeItem('activeTicket');
     setActiveTicket(null);
+    window.location.reload();
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.clear();
+    localStorage.removeItem('activeTicket');
     navigate('/login');
   };
 
@@ -238,27 +448,21 @@ export default function CustomerDashboard() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            className="relative p-2 text-on-surface-variant hover:text-secondary transition-colors active:opacity-80 rounded-lg cursor-pointer"
-          >
-            <Bell className="w-5 h-5 text-on-surface-variant" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full" />
-          </button>
+          <NotificationBell />
 
           <div className="h-8 w-[1px] bg-outline-variant/50" />
 
           <div className="flex items-center gap-3">
             <div className="text-right">
               <span className="text-xs font-bold text-primary block capitalize leading-none mb-1">
-                {namePrefix}
+                {displayName}
               </span>
               <span className="text-[10px] text-on-surface-variant font-medium block uppercase tracking-wider">
                 Customer
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden border-2 border-secondary-container shadow-sm flex items-center justify-center text-white font-bold text-sm">
-              {namePrefix.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </div>
           </div>
         </div>
@@ -278,10 +482,6 @@ export default function CustomerDashboard() {
               <p className="text-on-surface-variant text-sm font-medium mt-1">
                 Welcome back, here is your current queue status.
               </p>
-            </div>
-            <div className="hidden md:flex items-center gap-2.5 bg-green-500/10 border border-green-500/25 px-4 py-2 rounded-xl text-green-700 text-xs font-semibold">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-              <span>Interactive Queue Connection Live</span>
             </div>
           </div>
 
@@ -331,33 +531,55 @@ export default function CustomerDashboard() {
             <div className="lg:col-span-6 bg-primary-container rounded-3xl p-8 shadow-xl flex flex-col justify-between relative overflow-hidden group min-h-[300px]">
               <div className="absolute top-0 right-0 w-64 h-64 bg-secondary/15 rounded-full -mr-24 -mt-24 blur-3xl group-hover:scale-110 transition-transform duration-700" />
 
-              <div className="flex justify-between items-start relative z-10 w-full">
-                <div>
-                  <span className="text-secondary-fixed text-xs font-bold tracking-[0.2em] uppercase">
-                    Now Serving
-                  </span>
-                  <div className="text-8xl font-black text-surface-container-lowest mt-2 tracking-tighter hover:scale-105 transition-transform origin-left font-mono">
-                    {liveNowServing.number}
+              {liveNowServing ? (
+                <>
+                  <div className="flex justify-between items-start relative z-10 w-full">
+                    <div>
+                      <span className="text-secondary-fixed text-xs font-bold tracking-[0.2em] uppercase">
+                        Now Serving
+                      </span>
+                      <div className="text-8xl font-black text-surface-container-lowest mt-2 tracking-tighter hover:scale-105 transition-transform origin-left font-mono">
+                        {liveNowServing.number}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-on-primary-container/20 px-3 py-1.5 rounded-full border border-on-primary-container/30 backdrop-blur-sm">
+                      <span className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-ping" />
+                      <span className="text-white text-[10px] font-bold uppercase tracking-widest">
+                        Live
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 bg-on-primary-container/20 px-3 py-1.5 rounded-full border border-on-primary-container/30 backdrop-blur-sm">
-                  <span className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-ping" />
-                  <span className="text-white text-[10px] font-bold uppercase tracking-widest">
-                    Live Terminal
-                  </span>
-                </div>
-              </div>
-
-              <div className="border-t border-on-primary-container/35 pt-6 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8">
-                <div className="flex items-center gap-3">
-                  <Armchair className="w-5 h-5 text-secondary-container" />
-                  <p className="text-surface-container-lowest font-semibold text-lg">
-                    {liveNowServing.counter} — <span className="text-secondary-fixed">{liveNowServing.service}</span>
+                  <div className="border-t border-on-primary-container/35 pt-6 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8">
+                    <div className="flex items-center gap-3">
+                      <Armchair className="w-5 h-5 text-secondary-container" />
+                      <p className="text-surface-container-lowest font-semibold text-lg">
+                        {liveNowServing.counter} —{' '}
+                        <span className="text-secondary-fixed">{liveNowServing.service}</span>
+                      </p>
+                    </div>
+                    <p className="text-xs text-blue-100/40 font-medium">
+                      Please proceed when called
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full relative z-10 py-8 text-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-on-primary-container/20 flex items-center justify-center mb-2">
+                    <Clock className="w-7 h-7 text-blue-100/50" />
+                  </div>
+                  <p className="text-secondary-fixed text-xs font-bold tracking-[0.2em] uppercase">
+                    Now Serving
+                  </p>
+                  <p className="text-2xl font-bold text-surface-container-lowest/60 font-mono">
+                    — —
+                  </p>
+                  <p className="text-xs text-blue-100/40 font-medium max-w-[200px] leading-relaxed">
+                    No customers are currently being served. The counter is idle.
                   </p>
                 </div>
-                <p className="text-xs text-blue-100/40 font-medium">Please proceed when called</p>
-              </div>
+              )}
             </div>
 
             {/* My Queue Ticket */}
@@ -417,28 +639,13 @@ export default function CustomerDashboard() {
                   <button
                     type="button"
                     onClick={handleCancelTicket}
-                    className="mt-6 text-xs font-bold text-outline hover:text-error transition-colors cursor-pointer"
+                    disabled={activeTicket.status !== 'waiting'}
+                    className="mt-6 text-xs font-bold text-outline hover:text-error transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Cancel Virtual Ticket
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Quick Info */}
-          <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/60 shadow-sm">
-            <h3 className="font-bold text-primary mb-3">About SmartQ Virtual Queueing</h3>
-            <p className="text-xs text-on-surface-variant leading-relaxed mb-3">
-              Your ticket position is simulated dynamically in real-time. Staff call clients based on counter configurations.
-            </p>
-            <div className="flex gap-4">
-              <span className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                <Ticket className="w-3.5 h-3.5" /> Virtual Token System
-              </span>
-              <span className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" /> SMS Alerts Active
-              </span>
             </div>
           </div>
         </motion.div>

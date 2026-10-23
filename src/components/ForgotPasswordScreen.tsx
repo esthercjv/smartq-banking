@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Landmark, Mail, ArrowLeft, Send, CheckCircle2 } from 'lucide-react';
+import { Landmark, Mail, ArrowLeft, Send, ShieldAlert } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface ForgotPasswordScreenProps {
   onNavigate: (route: string) => void;
@@ -8,18 +9,28 @@ interface ForgotPasswordScreenProps {
 
 export default function ForgotPasswordScreen({ onNavigate }: ForgotPasswordScreenProps) {
   const [email, setEmail] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 1000);
+    setError(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setIsSent(true);
   };
 
   return (
@@ -46,9 +57,9 @@ export default function ForgotPasswordScreen({ onNavigate }: ForgotPasswordScree
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border border-white/5 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-secondary-container" />
 
-        <h2 className="text-[24px] font-semibold text-primary mb-4">Reset Password</h2>
+        <h2 className="text-[24px] font-semibold text-primary mb-4 text-center">Reset Password</h2>
 
-        {!isSubmitted ? (
+        {!isSent ? (
           <form className="space-y-6" onSubmit={handleSubmit}>
             <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
               Enter your registered bank email address below. We'll send you secure instructions to recover your dashboard credentials.
@@ -75,6 +86,17 @@ export default function ForgotPasswordScreen({ onNavigate }: ForgotPasswordScree
               </div>
             </div>
 
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start gap-2 bg-error-container/40 border border-error/20 p-3 rounded-xl text-xs text-error font-medium"
+              >
+                <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </motion.div>
+            )}
+
             {/* Send Instructions button */}
             <button
               type="submit"
@@ -95,15 +117,18 @@ export default function ForgotPasswordScreen({ onNavigate }: ForgotPasswordScree
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center py-4 space-y-4"
+            className="text-center space-y-4 py-4"
           >
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-primary text-base">Check Your Inbox</h3>
-            <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
-              If an account is associated with <strong>{email}</strong>, we have sent a secure password reset link. Please check your spam folder if you do not receive it in 2 minutes.
+            <p className="text-sm font-semibold text-green-700">
+              A password reset link has been sent to <strong>{email}</strong>. Please check your inbox.
             </p>
+            <button
+              type="button"
+              onClick={() => onNavigate('/login')}
+              className="text-secondary font-bold hover:underline text-sm cursor-pointer"
+            >
+              ← Return to Login
+            </button>
           </motion.div>
         )}
 

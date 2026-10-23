@@ -103,7 +103,7 @@ navigate('/customer-dashboard');
       <div className="w-full bg-surface-container-lowest rounded-2xl p-8 sm:p-10 shadow-[0px_10px_40px_rgba(0,0,0,0.4)] border border-white/5 relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-secondary-container via-secondary to-secondary-container" />
 
-        <h2 className="text-[24px] font-semibold text-primary mb-6">Welcome Back</h2>
+        <h2 className="text-[24px] font-semibold text-primary mb-6 text-center">Welcome Back!</h2>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Email Input */}

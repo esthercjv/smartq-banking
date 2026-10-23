@@ -2,10 +2,12 @@
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import NotificationBell from './NotificationBell';
+import StaffNotificationBell from './StaffNotificationBell';
+import ManagementNotificationBell from './ManagementNotificationBell';
 import { 
   Landmark, 
   LogOut, 
-  Bell, 
   LayoutDashboard,
   UserCheck,
   Activity,
@@ -25,38 +27,46 @@ import {
   Sliders
 } from 'lucide-react';
 
+interface QueueRow {
+  id: string;
+  ticket_number: string;
+  service_name: string;
+  status: string;
+  estimated_wait: number | null;
+  created_at: string;
+  user_id?: string | null;
+}
+
+interface CounterRow {
+  key: string;
+  label: string;
+  service: string;
+  ticket: string;
+  state: 'serving' | 'idle' | 'inactive';
+  staffName: string | null;
+}
+
 export default function StatusMonitoring() {
   const navigate = useNavigate();
 
   // Role and Auth
 const [userRole, setUserRole] = useState<string | null>(null);
+const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 const [loading, setLoading] = useState(true);
 const [searchQuery, setSearchQuery] = useState('');
 const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'serving'>('all');
 const [autoRefresh, setAutoRefresh] = useState(true);
 const [highlightedTickets, setHighlightedTickets] = useState<Record<string, boolean>>({});
-const [showFullLogs, setShowFullLogs] = useState(false);
 const [reloadPulse, setReloadPulse] = useState(false);
-const [queueTickets, setQueueTickets] = useState([
-  { id: '#72', service: 'Cash Deposit', wait: '08:45', status: 'Serving', counter: 'Counter 04', customer: 'James Wilson' },
-  { id: '#73', service: 'Account Inquiry', wait: '12:10', status: 'Waiting', counter: '—', customer: 'Sarah Connor' },
-  { id: '#74', service: 'Card Collection', wait: '15:30', status: 'Waiting', counter: '—', customer: 'Alex Mercer' },
-  { id: '#75', service: 'Loan Consultation', wait: '18:22', status: 'Waiting', counter: '—', customer: 'Bruce Wayne' },
-  { id: '#71', service: 'Account Closure', wait: '22:05', status: 'Completed', counter: 'Counter 02', customer: 'David Chen' },
-  { id: '#76', service: 'General Services', wait: '02:15', status: 'Waiting', counter: '—', customer: 'Zoe Vance' },
-]);
-const [counterDashboard, setCounterDashboard] = useState([
-  { id: '01', staff: 'Sarah Jenkins', service: 'General Services', status: 'Active', serving: '#68' },
-  { id: '02', staff: 'David Chen', service: 'Corporate Banking', status: 'Active', serving: '#71' },
-  { id: '03', staff: 'Maria Garcia', service: 'Teller Operations', status: 'On Break', serving: '—' },
-  { id: '04', staff: 'James Wilson', service: 'Express Teller', status: 'Active', serving: '#72' },
-]);
-const [auditLogs, setAuditLogs] = useState<string[]>([
-  '06:45 PM: Ticket #72 called to Counter 04 by teller James Wilson.',
-  '06:42 PM: Ticket #71 processed and marked completed at Counter 02.',
-  '06:30 PM: System sync completed. Auto-refreshing branch line distribution.',
-  '06:15 PM: Teller operations initialized. Main lobby kiosk online.'
-]);
+
+// Live Supabase queue data
+const [queueItems, setQueueItems] = useState<QueueRow[]>([]);
+const [counters, setCounters] = useState<CounterRow[]>([]);
+const [nowServing, setNowServing] = useState<string | null>(null);
+const [servingService, setServingService] = useState<string | null>(null);
+const [servingUserId, setServingUserId] = useState<string | null>(null);
+const [waitingCount, setWaitingCount] = useState(0);
+const [avgWait, setAvgWait] = useState<number | null>(null);
 
 const [userEmail, setUserEmail] = useState('');
 const namePrefix = userEmail ? userEmail.split('@')[0] : '';
@@ -66,6 +76,7 @@ const namePrefix = userEmail ? userEmail.split('@')[0] : '';
     const { data } = await supabase.auth.getSession();
     const session = data.session;
     if (!session) { navigate('/login'); return; }
+    setCurrentUserId(session.user.id);
 
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -87,41 +98,193 @@ const namePrefix = userEmail ? userEmail.split('@')[0] : '';
   verifySession();
 }, [navigate]);
 
-    // Auto-simulation of active banking terminal events
-  useEffect(() => {
-    if (!autoRefresh) return;
+// Load all live data from Supabase
+const loadLiveData = async () => {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTodayStr = startOfToday.toISOString();
 
-    const interval = setInterval(() => {
-      // Periodic update to tickets or wait times to represent a living, breathing application
-      setQueueTickets(prev => {
-        return prev.map(t => {
-          if (t.status === 'Waiting') {
-            const [mins, secs] = t.wait.split(':').map(Number);
-            let total = mins * 60 + secs + Math.floor(Math.random() * 15) - 5;
-            if (total < 60) total = 60;
-            const newMins = String(Math.floor(total / 60)).padStart(2, '0');
-            const newSecs = String(total % 60).padStart(2, '0');
-            return { ...t, wait: `${newMins}:${newSecs}` };
-          }
-          return t;
+  // Get currently serving ticket
+  const { data: servingData } = await supabase
+    .from('queues')
+    .select('ticket_number, service_name, customer_name, user_id')
+    .eq('status', 'serving')
+    .gte('created_at', startOfTodayStr)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (servingData) {
+    setNowServing(servingData.ticket_number);
+    setServingService(servingData.service_name);
+    setServingUserId(servingData.user_id ?? null);
+  } else {
+    setNowServing(null);
+    setServingService(null);
+    setServingUserId(null);
+  }
+
+  // Get waiting count
+  const { count } = await supabase
+    .from('queues')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'waiting')
+    .gte('created_at', startOfTodayStr);
+
+  setWaitingCount(count || 0);
+
+  // Get queue list. Customers must never fetch other people's service types
+  // into the browser (privacy): they get a restricted column set and their own
+  // service names are merged in separately.
+  const effectiveRole = userRole ?? localStorage.getItem('userRole');
+  const currentUid = currentUserId ?? localStorage.getItem('userId');
+  const isCustomerQuery = effectiveRole === 'customer';
+
+  const queueSelect = isCustomerQuery
+    ? 'id, ticket_number, status, estimated_wait, created_at, user_id'
+    : 'id, ticket_number, service_name, status, estimated_wait, created_at, user_id';
+
+  const queueQuery = (supabase
+    .from('queues')
+    .select(queueSelect) as any)
+    .in('status', ['waiting', 'serving'])
+    .gte('created_at', startOfTodayStr)
+    .order('created_at', { ascending: true });
+
+  const { data: queueList } = await queueQuery;
+
+  if (queueList) {
+    if (isCustomerQuery) {
+      const ownIds = queueList
+        .filter((r: any) => r.user_id && currentUid && r.user_id === currentUid)
+        .map((r: any) => r.id);
+
+      const ownServices = new Map<string, string>();
+      if (ownIds.length > 0) {
+      const { data: ownRows } = await (supabase
+          .from('queues')
+          .select('id, service_name') as any)
+          .in('id', ownIds);
+        (ownRows || []).forEach((r: any) => ownServices.set(r.id, r.service_name));
+      }
+
+      setQueueItems(
+        queueList.map((r: any) => ({
+          ...r,
+          service_name: ownServices.get(r.id) ?? '',
+        })) as QueueRow[]
+      );
+    } else {
+      setQueueItems(queueList as QueueRow[]);
+    }
+  }
+
+  // Real average wait time from actual data
+  const { data: avgData } = await supabase
+    .from('queues')
+    .select('estimated_wait')
+    .eq('status', 'waiting')
+    .gte('created_at', startOfTodayStr);
+
+  if (avgData && avgData.length > 0) {
+    const avg = avgData.reduce((sum, r) => sum + (r.estimated_wait || 0), 0) / avgData.length;
+    setAvgWait(Math.round(avg));
+  } else {
+    setAvgWait(null);
+  }
+
+  // Counter overview: every row from the counters table, joined with the
+  // queue row currently being served at that counter (status = 'serving').
+  // Staff names are attached for staff/manager/admin views only.
+  const { data: countersTable, error: countersError } = await supabase
+    .from('counters')
+    .select('id, name, status, staff_id')
+    .order('name');
+
+  if (countersError) {
+    console.error('Failed to load counters:', countersError.message);
+    setCounters([]);
+  } else if (!countersTable || countersTable.length === 0) {
+    setCounters([]);
+  } else {
+    const { data: servingRows, error: servingError } = await supabase
+      .from('queues')
+      .select('ticket_number, service_name, counter_id')
+      .eq('status', 'serving')
+      .gte('created_at', startOfTodayStr);
+
+    if (servingError) {
+      console.error('Failed to load serving tickets:', servingError.message);
+    }
+
+    const servingByCounter = new Map<string, { ticket: string; service: string }>();
+    (servingRows ?? []).forEach((r: any) => {
+      if (r.counter_id) {
+        servingByCounter.set(r.counter_id, {
+          ticket: r.ticket_number ?? '—',
+          service: r.service_name ?? ''
         });
-      });
+      }
+    });
 
-      // Occasional audit log stream action
-      const randomTimes = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const randomEvents = [
-        `Teller Counter 01 registered status check.`,
-        `Kiosk heartbeat status: green, 0ms packet latency.`,
-        `Estimated wait time updated based on current speed coefficient.`,
-        `Dynamic wait prediction model verified standard queue throughput.`
-      ];
-      const selectedEvent = randomEvents[Math.floor(Math.random() * randomEvents.length)];
-      setAuditLogs(prev => [`${randomTimes}: ${selectedEvent}`, ...prev.slice(0, 15)]);
+    const role = userRole ?? localStorage.getItem('userRole');
+    const staffIds = role !== 'customer'
+      ? Array.from(new Set((countersTable as any[]).map(c => c.staff_id).filter(Boolean)))
+      : [];
+    const staffNames = new Map<string, string>();
+    if (staffIds.length > 0) {
+      const { data: staffRows, error: staffError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', staffIds);
+      if (staffError) {
+        console.error('Failed to load staff names:', staffError.message);
+      } else {
+        (staffRows ?? []).forEach((p: any) => staffNames.set(p.id, p.full_name || p.email || ''));
+      }
+    }
 
-    }, 7000);
+    setCounters(
+      (countersTable as any[]).map((c: any, i: number) => {
+        const serving = servingByCounter.get(c.name);
+        return {
+          key: String(c.id ?? i),
+          label: c.name ?? 'Counter',
+          service: serving?.service ?? '',
+          ticket: serving?.ticket ?? '—',
+          state: c.status === 'active' ? (serving ? 'serving' : 'idle') : 'inactive',
+          staffName: role !== 'customer' && c.staff_id ? (staffNames.get(c.staff_id) ?? '') : null
+        } as CounterRow;
+      })
+    );
+  }
+};
 
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
+useEffect(() => {
+  loadLiveData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Real-time subscription to the queues table
+useEffect(() => {
+  if (!autoRefresh) return;
+
+  const channel = supabase
+    .channel('status-monitor-live')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'queues'
+    }, () => {
+      loadLiveData();
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [autoRefresh]);
 
    if (loading) return (
     <div className="min-h-screen bg-[#F2F2F2] flex items-center justify-center">
@@ -132,7 +295,7 @@ const namePrefix = userEmail ? userEmail.split('@')[0] : '';
   
 const handleLogout = async () => {
   await supabase.auth.signOut();
-  localStorage.clear();
+  localStorage.removeItem('activeTicket');
   navigate('/login');
 };
 
@@ -140,16 +303,8 @@ const handleLogout = async () => {
     setReloadPulse(true);
     setTimeout(() => setReloadPulse(false), 900);
 
-    // Shuffle/Re-evaluate list values realistically
-    setQueueTickets(prev => {
-      return prev.map(t => ({
-        ...t,
-        wait: `${String(Math.floor(Math.random() * 20)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`
-      }));
-    });
-
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setAuditLogs(prev => [`${nowStr}: Board reloads manually initialized by operator.`, ...prev]);
+    // Re-fetch the latest real data from Supabase
+    loadLiveData();
   };
 
   const toggleRowHighlight = (id: string) => {
@@ -159,25 +314,28 @@ const handleLogout = async () => {
     }));
   };
 
-  // Filter implementation
-  const filteredTickets = queueTickets.filter(ticket => {
-    // Search filter
-    const matchesSearch = ticket.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          ticket.service.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          ticket.customer.toLowerCase().includes(searchQuery.toLowerCase());
-    
+  // Filter implementation (ticket number + service only — no personal data)
+  const isCustomerView = userRole === 'customer';
+  const isOwnTicket = (ticket: any) =>
+    !!currentUserId && ticket.user_id === currentUserId;
+
+  const filteredItems = queueItems.filter(item => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = isCustomerView
+      ? item.ticket_number.toLowerCase().includes(query) ||
+        (isOwnTicket(item) && item.service_name.toLowerCase().includes(query))
+      : item.ticket_number.toLowerCase().includes(query) ||
+        item.service_name.toLowerCase().includes(query);
+
     if (!matchesSearch) return false;
 
     // Tab filter
     if (activeFilter === 'all') return true;
-    if (activeFilter === 'waiting') return ticket.status === 'Waiting';
-    if (activeFilter === 'serving') return ticket.status === 'Serving';
-    return true;
+    return item.status === activeFilter;
   });
 
-  // Dynamic statistics calculations
-  const totalWaitingCount = queueTickets.filter(t => t.status === 'Waiting').length;
-  const servingNowTicket = queueTickets.find(t => t.status === 'Serving');
+  const formatStatus = (status: string) =>
+    status ? status.charAt(0).toUpperCase() + status.slice(1) : status;
 
   // Side navigation menus based on roles
   const renderSidebar = () => {
@@ -307,15 +465,6 @@ const handleLogout = async () => {
               <span>Analytics</span>
             </button>
 
-            <button 
-              type="button"
-              onClick={() => navigate('/wait-time-prediction')}
-              className="flex items-center gap-3 p-3 text-blue-100/60 hover:bg-white/5 rounded-xl font-medium text-xs text-left transition-colors cursor-pointer"
-            >
-              <Timer className="w-4 h-4 shrink-0" />
-              <span>Wait Time Prediction</span>
-            </button>
-
             <div className="mt-auto border-t border-[#7687b2]/25 pt-4 flex flex-col gap-2">
               <button 
                 type="button"
@@ -360,41 +509,61 @@ const handleLogout = async () => {
         <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto pr-1 custom-scrollbar">
           <button 
             type="button"
-            onClick={() => navigate(isAdmin ? '/admin-dashboard' : '/manager-dashboard')}
+            onClick={() => navigate('/admin-dashboard')}
             className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
           >
             <LayoutDashboard className="w-4 h-4 shrink-0" />
-            <span>Admin Dashboard</span>
+            <span>Dashboard</span>
           </button>
 
-          <button 
-            type="button"
-            className="flex items-center gap-2.5 p-2.5 rounded-xl font-bold text-xs text-left text-[#785d00] bg-[#fed977] shadow-md cursor-pointer"
-          >
-            <Activity className="w-4 h-4 shrink-0" />
-            <span>Status Monitoring</span>
-          </button>
+          {!isAdmin && (
+            <>
+              <button 
+                type="button"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl font-bold text-xs text-left text-[#785d00] bg-[#fed977] shadow-md cursor-pointer"
+              >
+                <Activity className="w-4 h-4 shrink-0" />
+                <span>Status Monitoring</span>
+              </button>
 
-          <button 
-            type="button"
-            onClick={() => navigate('/analytics')}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
-          >
-            <Clock className="w-4 h-4 shrink-0" />
-            <span>Analytics Charts</span>
-          </button>
+              <button 
+                type="button"
+                onClick={() => navigate('/analytics')}
+                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <TrendingUp className="w-4 h-4 shrink-0" />
+                <span>Analytics</span>
+              </button>
 
-          <button 
-            type="button"
-            onClick={() => navigate('/reports')}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
-          >
-            <Terminal className="w-4 h-4 shrink-0" />
-            <span>Reports</span>
-          </button>
+              <button 
+                type="button"
+                onClick={() => navigate('/reports')}
+                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <Terminal className="w-4 h-4 shrink-0" />
+                <span>Reports</span>
+              </button>
+            </>
+          )}
 
           {isAdmin && (
             <>
+              <button 
+                type="button"
+                onClick={() => navigate('/user-management')}
+                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all"
+              >
+                <UserCheck className="w-4 h-4 shrink-0" />
+                <span>User Management</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => navigate('/service-management')}
+                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all"
+              >
+                <Sliders className="w-4 h-4 shrink-0" />
+                <span>Service Management</span>
+              </button>
               <button 
                 type="button"
                 onClick={() => navigate('/counter-management')}
@@ -403,39 +572,14 @@ const handleLogout = async () => {
                 <Users className="w-4 h-4 shrink-0" />
                 <span>Counter Management</span>
               </button>
-              <button 
-                type="button"
-                onClick={() => navigate('/service-management')}
-                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all"
-              >
-                <Sliders className="w-4 h-4 shrink-0" />
-                <span>Service Type Setup</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => navigate('/user-management')}
-                className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all"
-              >
-                <UserCheck className="w-4 h-4 shrink-0" />
-                <span>User Roles Board</span>
-              </button>
             </>
           )}
-
-          <button 
-            type="button"
-            onClick={() => navigate('/wait-time-prediction')}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
-          >
-            <Timer className="w-4 h-4 shrink-0" />
-            <span>Wait Time Predictor</span>
-          </button>
 
           <div className="mt-auto border-t border-[#7687b2]/25 pt-4 flex flex-col gap-2">
             <button 
               type="button"
               onClick={() => navigate('/my-profile')}
-              className="flex items-center gap-3 p-3 text-blue-100/60 hover:bg-white/5 rounded-xl font-medium text-xs text-left transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 p-2.5 rounded-xl font-medium text-xs text-left text-blue-100/60 hover:bg-white/5 transition-all cursor-pointer"
             >
               <SettingsIcon className="w-4 h-4 shrink-0" />
               <span>My Profile</span>
@@ -484,10 +628,16 @@ const handleLogout = async () => {
             </label>
           </div>
 
-          <button className="p-1.5 text-[#44464e] hover:text-[#755b00] transition-colors relative rounded-lg hover:bg-gray-100">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-600 rounded-full ring-2 ring-white"></span>
-          </button>
+          {isCustomerView ? (
+            <NotificationBell buttonClassName="relative p-2 text-on-surface-variant hover:text-secondary transition-colors rounded-lg cursor-pointer" />
+          ) : userRole === 'staff' ? (
+            <StaffNotificationBell buttonClassName="relative p-2 text-on-surface-variant hover:text-secondary transition-colors rounded-lg cursor-pointer" />
+          ) : (
+            <ManagementNotificationBell
+              role={userRole === 'admin' ? 'admin' : 'manager'}
+              buttonClassName="relative p-2 text-on-surface-variant hover:text-secondary transition-colors rounded-lg cursor-pointer"
+            />
+          )}
           
           <div className="h-8 w-[1px] bg-[#c5c6cf]" />
 
@@ -525,21 +675,23 @@ const handleLogout = async () => {
                 </span>
               </div>
               <h3 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-none tracking-tight font-mono">
-                NOW SERVING {servingNowTicket ? servingNowTicket.id : '#72'}
+                NOW SERVING {nowServing || '—'}
               </h3>
               <p className="text-[#7687b2] font-medium text-sm pt-1">
-                Assigned to {servingNowTicket ? servingNowTicket.counter : 'Counter 04'} ΓÇó Customer: {servingNowTicket ? servingNowTicket.customer : 'James Wilson'}
+                {!isCustomerView || (servingUserId && servingUserId === currentUserId)
+                  ? <>Service: {servingService || '—'}</>
+                  : <>Service details are private for other customers</>}
               </p>
             </div>
 
             <div className="relative z-10 flex gap-4 w-full md:w-auto shrink-0">
               <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 text-center min-w-[124px] flex-1 md:flex-none">
                 <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider">In Line Waiting</p>
-                <p className="text-[#fed977] text-3xl font-extrabold mt-1">{totalWaitingCount}</p>
+                <p className="text-[#fed977] text-3xl font-extrabold mt-1">{waitingCount}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 text-center min-w-[124px] flex-1 md:flex-none">
                 <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider">Avg. Response</p>
-                <p className="text-white text-3xl font-extrabold mt-1">12m</p>
+                <p className="text-white text-3xl font-extrabold mt-1">{avgWait !== null ? `${avgWait}m` : '—'}</p>
               </div>
             </div>
           </div>
@@ -598,7 +750,7 @@ const handleLogout = async () => {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search ticket, name..."
+                      placeholder={isCustomerView ? 'Search ticket #...' : 'Search ticket, service...'}
                       className="bg-transparent border-none text-xs text-[#00081e] outline-none p-0 focus:ring-0 placeholder-[#75777f] font-semibold w-full"
                     />
                   </div>
@@ -613,57 +765,66 @@ const handleLogout = async () => {
                 </div>
               </div>
 
-              {/* Responsive Queue Table */}
+              {/* Responsive Queue Table — privacy-respecting (no customer names) */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[#00081e] text-white">
                       <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider">Ticket #</th>
-                      <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider">Customer</th>
                       <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider">Service Type</th>
                       <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider text-center">Wait Time</th>
                       <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider text-center">Status</th>
-                      <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-wider">Destination</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#c5c6cf]">
-                    {filteredTickets.length > 0 ? (
-                      filteredTickets.map((ticket, index) => {
-                        const isHighlighted = highlightedTickets[ticket.id];
+                    {filteredItems.length > 0 ? (
+                      filteredItems.map((item, index) => {
+                        const isHighlighted = highlightedTickets[item.id];
                         return (
                           <tr 
-                            key={ticket.id} 
-                            onClick={() => toggleRowHighlight(ticket.id)}
+                            key={item.id} 
+                            onClick={() => toggleRowHighlight(item.id)}
                             className={`transition-colors cursor-pointer border-b border-[#c5c6cf] ${
                               isHighlighted 
                                 ? 'bg-[#fed977]/20 border-l-4 border-l-[#755b00]' 
-                                : index % 2 === 1 ? 'bg-[#f3f3f3] hover:bg-neutral-200/50' : 'bg-white hover:bg-neutral-50'
+                                : isCustomerView && isOwnTicket(item)
+                                  ? 'bg-secondary-container/20 border-l-4 border-l-[#755b00]'
+                                  : index % 2 === 1 ? 'bg-[#f3f3f3] hover:bg-neutral-200/50' : 'bg-white hover:bg-neutral-50'
                             }`}
                           >
-                            <td className="px-6 py-4 font-extrabold text-[#00081e] font-mono">{ticket.id}</td>
-                            <td className="px-6 py-4 font-semibold text-[#00081e]">{ticket.customer}</td>
-                            <td className="px-6 py-4 text-xs font-semibold text-[#44464e]">{ticket.service}</td>
-                            <td className="px-6 py-4 text-center font-semibold text-[#44464e] font-mono text-xs">{ticket.wait}</td>
+                            <td className="px-6 py-4 font-extrabold text-[#00081e] font-mono">
+                              {item.ticket_number}
+                              {isCustomerView && isOwnTicket(item) && (
+                                <span className="ml-2 text-[9px] font-bold bg-secondary-container text-[#584400] px-1.5 py-0.5 rounded">
+                                  YOUR TICKET
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-xs font-semibold text-[#44464e]">
+                              {!isCustomerView || isOwnTicket(item)
+                                ? item.service_name
+                                : <span className="text-outline italic">Hidden for privacy</span>}
+                            </td>
+                            <td className="px-6 py-4 text-center font-semibold text-[#44464e] font-mono text-xs">
+                              {item.estimated_wait !== null && item.estimated_wait !== undefined ? `${item.estimated_wait} min` : '—'}
+                            </td>
                             <td className="px-6 py-4 text-center">
                               <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                                ticket.status === 'Serving' 
+                                item.status === 'serving' 
                                   ? 'bg-green-100 text-green-700' 
-                                  : ticket.status === 'Completed'
+                                  : item.status === 'completed'
                                     ? 'bg-blue-100 text-blue-700'
                                     : 'bg-[#fed977]/30 text-[#755b00]'
                               }`}>
-                                {ticket.status}
+                                {formatStatus(item.status)}
                               </span>
-                            </td>
-                            <td className="px-6 py-4 font-semibold text-xs text-[#75777f]">
-                              {ticket.counter}
                             </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-[#75777f] font-semibold">
+                        <td colSpan={4} className="px-6 py-12 text-center text-xs text-[#75777f] font-semibold">
                           No matching tickets in active line. Try clearing search.
                         </td>
                       </tr>
@@ -671,35 +832,6 @@ const handleLogout = async () => {
                   </tbody>
                 </table>
               </div>
-
-              {/* View/Hide Live Logs control */}
-              <div className="p-4 bg-[#f3f3f3] text-center border-t border-[#c5c6cf]">
-                <button 
-                  onClick={() => setShowFullLogs(!showFullLogs)}
-                  className="text-[#755b00] font-bold text-xs hover:underline transition-all cursor-pointer inline-flex items-center gap-1.5"
-                >
-                  {showFullLogs ? 'Hide Live Monitor Audit Trace' : 'View Live Monitor Audit Trace'}
-                </button>
-              </div>
-
-              {/* Expandable dark CLI view inside the table footer */}
-              {showFullLogs && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="bg-[#1C2C46] border-t border-[#c5c6cf] p-6 text-white font-mono text-[11px] space-y-2 max-h-48 overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between text-[#fed977] font-bold uppercase tracking-wider pb-1.5 border-b border-white/10 mb-2">
-                    <span>SmartQ Terminal Logger v2.4</span>
-                    <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse">LIVE FEED</span>
-                  </div>
-                  {auditLogs.map((log, index) => (
-                    <div key={index} className="text-[#A0AEC0] border-l-2 border-[#fed977] pl-3 leading-relaxed">
-                      {log}
-                    </div>
-                  ))}
-                </motion.div>
-              )}
 
             </div>
 
@@ -709,89 +841,60 @@ const handleLogout = async () => {
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-bold text-base text-[#00081e] tracking-tight">Counter Overview</h4>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#44464e] px-2 py-1 bg-[#eeeeee] rounded-[4px] border border-gray-200">
-                  {counterDashboard.length} Total
+                  {counters.length} Total
                 </span>
               </div>
 
-              {/* Counters List */}
-              <div className="space-y-4">
-                {counterDashboard.map((counter) => {
-                  const isCounterExpress = counter.id === '04'; // Highlight James Wilson/Counter 04 as the golden highlighted focus
-                  
-                  return (
+              {/* Counters List — real data only */}
+              {counters.length === 0 ? (
+                <div className="bg-white border border-[#c5c6cf] rounded-[10px] p-6 text-center text-xs text-[#75777f] font-semibold">
+                  No counters configured.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {counters.map((counter) => (
                     <div 
-                      key={counter.id}
-                      className={`p-4 rounded-[10px] shadow-sm flex items-center gap-4 transition-transform active:scale-[0.98] ${
-                        isCounterExpress 
-                          ? 'bg-white border-2 border-[#755b00] ring-4 ring-[#755b00]/5'
-                          : counter.status === 'On Break'
-                            ? 'bg-[#f3f3f3] border border-[#c5c6cf] opacity-75 grayscale-[0.3]'
-                            : 'bg-white border border-[#c5c6cf]'
-                      }`}
+                      key={counter.key}
+                      className="p-4 rounded-[10px] shadow-sm flex items-center gap-4 bg-white border border-[#c5c6cf] transition-transform active:scale-[0.98]"
                     >
-                      <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-mono ${
-                        isCounterExpress 
-                          ? 'bg-[#755b00] text-[#00081e]' 
-                          : counter.status === 'On Break'
-                            ? 'bg-[#75777f] text-white'
-                            : 'bg-[#00081e] text-white'
-                      }`}>
+                      <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center font-mono bg-[#00081e] text-white">
                         <span className="text-[9px] font-bold leading-none">C</span>
-                        <span className="text-sm font-extrabold leading-none mt-1">{counter.id}</span>
+                        <span className="text-sm font-extrabold leading-none mt-1">{counter.label.slice(0, 2)}</span>
                       </div>
 
                       <div className="flex-1">
                         <div className="flex justify-between items-start">
-                          <p className="font-bold text-sm text-[#00081e]">{counter.staff}</p>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                            counter.status === 'On Break' 
-                              ? 'bg-amber-100 text-amber-800' 
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {counter.status}
-                          </span>
+                          <p className="font-bold text-sm text-[#00081e]">{counter.label}</p>
+                          {counter.state === 'serving' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-green-100 text-green-700">
+                              Serving
+                            </span>
+                          ) : counter.state === 'idle' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600">
+                              Idle
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600">
+                              Inactive
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[11px] font-medium text-[#44464e]">{counter.service}</p>
+                        <p className="text-[11px] font-medium text-[#44464e]">{counter.service || '—'}</p>
+                        {counter.staffName && (
+                          <p className="text-[10px] font-semibold text-[#75777f] mt-0.5">
+                            Staff: {counter.staffName}
+                          </p>
+                        )}
                       </div>
 
                       <div className="text-right">
-                        <p className={`text-[9px] font-bold uppercase ${isCounterExpress ? 'text-[#755b00]' : 'text-zinc-500'}`}>
-                          {counter.status === 'On Break' ? 'Idle' : 'Serving'}
-                        </p>
-                        <p className={`text-sm font-extrabold ${isCounterExpress ? 'text-[#755b00]' : 'text-[#00081e]'}`}>
-                          {counter.serving}
-                        </p>
+                        <p className="text-[9px] font-bold uppercase text-zinc-500">Ticket</p>
+                        <p className="text-sm font-extrabold text-[#00081e]">{counter.ticket}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Branch Clock / Efficiency Metrics Widget */}
-              <div className="bg-[#00081e] p-5 rounded-[10px] shadow-sm text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="font-semibold text-sm text-white">Branch efficiency</p>
-                  <span className="text-[9px] bg-[#755b00] text-white font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
-                    98.2% SLA
-                  </span>
+                  ))}
                 </div>
-                
-                {/* Simulated bar chart representation */}
-                <div className="flex items-end gap-3.5 h-24 pt-2">
-                  <div className="flex-1 bg-[#755b00] rounded-t-[3px] transition-all duration-700" style={{ height: '60%' }} title="09:00 AM (60%)"></div>
-                  <div className="flex-1 bg-[#755b00]/80 rounded-t-[3px] transition-all duration-700" style={{ height: '85%' }} title="10:30 AM (85%)"></div>
-                  <div className="flex-1 bg-[#755b00] rounded-t-[3px] transition-all duration-700" style={{ height: '45%' }} title="12:00 PM (45%)"></div>
-                  <div className="flex-1 bg-[#755b00]/80 rounded-t-[3px] transition-all duration-700" style={{ height: '70%' }} title="01:30 PM (70%)"></div>
-                  <div className="flex-1 bg-[#755b00] rounded-t-[3px] transition-all duration-700" style={{ height: '95%' }} title="03:00 PM (95%)"></div>
-                  <div className="flex-1 bg-[#755b00]/80 rounded-t-[3px] transition-all duration-700" style={{ height: '65%' }} title="04:30 PM (65%)"></div>
-                </div>
-
-                <div className="flex justify-between text-[10px] text-[#7687b2] font-semibold font-mono mt-3 pt-2 border-t border-white/10">
-                  <span>09:00</span>
-                  <span>12:00</span>
-                  <span>15:00</span>
-                </div>
-              </div>
+              )}
 
             </div>
 
@@ -801,4 +904,3 @@ const handleLogout = async () => {
     </div>
   );
 }
-
