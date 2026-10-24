@@ -7,13 +7,11 @@ import StaffNotificationBell from './StaffNotificationBell';
 import ManagementNotificationBell from './ManagementNotificationBell';
 import { deviceAlert, getAlertPermission, requestAlertPermission } from './ticketAlerts';
 import {
-  DATASET_BASE,
   PEAK_FACTORS,
   getTimeOfDayKey,
-  predictWaitMinutes,
-  predictWaitRounded,
   type TimeOfDayKey,
 } from '../predictWait';
+import { predictWaitMinutes } from '../ml/waitTimeModel';
 import { 
   Landmark, 
   LogOut, 
@@ -3360,23 +3358,14 @@ export function WaitTimePredictionScreen() {
   const currentServiceName = currentService?.name || ticketServiceName || '—';
   const currentPeak = PEAK_FACTORS[timeOfDay];
 
-  // Shared wait prediction formula (src/predictWait.ts)
-  const baseTime = currentService && currentService.baseTime !== null ? currentService.baseTime : DATASET_BASE;
+  // Wait-time estimate from the offline regression model (src/ml/waitTimeModel.ts).
+  // The model uses only queue length and hour of day; it is intentionally static.
+  const estimate = predictWaitMinutes(peopleAhead, new Date().getHours());
 
-  const finalWaitTime = predictWaitRounded({
-    baseWait: baseTime,
-    peopleAhead,
-    activeCounters: activeTellers,
-    timeOfDay,
-  });
+  const finalWaitTime = Math.max(1, Math.round(estimate));
 
   // Unrounded estimate in minutes — keeps second-level accuracy for the countdown.
-  const remainingMinutes = predictWaitMinutes({
-    baseWait: baseTime,
-    peopleAhead,
-    activeCounters: activeTellers,
-    timeOfDay,
-  });
+  const remainingMinutes = Math.max(0, estimate);
 
   // 1-second clock for the live countdown.
   useEffect(() => {
@@ -3545,7 +3534,7 @@ export function WaitTimePredictionScreen() {
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-on-surface-variant">Time of Day</label>
                     <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs font-bold bg-[#F2F2F2] text-primary">
-                      {currentPeak.label}
+                      {currentPeak.label.replace(/\s*\(x[\d.]+\)/, '')}
                     </div>
                     <p className="text-[10px] text-outline font-medium">Based on current time</p>
                   </div>
@@ -3600,6 +3589,9 @@ export function WaitTimePredictionScreen() {
                       </h2>
                       <p className="text-xs font-medium text-[#44464e] max-w-sm mb-12">
                         Based on current branch traffic, historical peak patterns, and active counter availability.
+                      </p>
+                      <p className="text-[10px] text-outline font-medium max-w-sm mb-12">
+                        Estimate from a regression model trained on queue length and hour of day. Service type and counters are not model inputs.
                       </p>
 
                       {/* Device-alert opt-in — customers with an active ticket only */}
@@ -4585,24 +4577,24 @@ export function SystemIntegrationScreen() {
               <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-6 w-full text-center md:text-left">
                 
                 <div>
-                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Model Version</span>
-                  <p className="font-extrabold text-xs text-primary mt-1">v2.4.0 (Enterprise)</p>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Model</span>
+                  <p className="font-extrabold text-xs text-primary mt-1">Linear Regression (scikit-learn) · 437/547 rows</p>
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Current Accuracy</span>
-                  <p className="font-extrabold text-xs text-primary mt-1 font-mono">98.4%</p>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Test MAE</span>
+                  <p className="font-extrabold text-xs text-primary mt-1 font-mono">3.62 min</p>
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Inference Latency</span>
-                  <p className="font-extrabold text-xs text-primary mt-1 font-mono">42ms</p>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Test RMSE / R2</span>
+                  <p className="font-extrabold text-xs text-primary mt-1 font-mono">4.37 min / -0.02</p>
                 </div>
 
                 <div className="flex flex-col justify-center items-center md:items-start">
-                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Wait Prediction</span>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Model Type</span>
                   <span className="inline-block mt-1 px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-[#fed977] text-[#241a00] border border-[#fed977]">
-                    Optimized
+                    Static · No Online Retraining
                   </span>
                 </div>
 

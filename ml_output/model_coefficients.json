@@ -1,0 +1,15 @@
+{
+  "feature_names": [
+    "queue_length",
+    "arrival_hour",
+    "peak_hour"
+  ],
+  "intercept": 11.012131466274488,
+  "coefficients": [
+    -0.02477369464181842,
+    0.028614208638117117,
+    -0.3688070503803712
+  ],
+  "trained_on_rows": 437,
+  "random_seed": 42
+}

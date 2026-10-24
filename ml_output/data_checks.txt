@@ -1,0 +1,9 @@
+rows_loaded: 560
+rows_removed_negative_wait_time: 13
+final_rows: 547
+wait_time_mean: 10.37780621572212
+wait_time_std: 4.771043797195728
+pearson_correlation_queue_length_wait_time: -0.060341771860177876
+spearman_correlation_queue_length_wait_time: -0.058408385999244784
+anova_wait_time_by_arrival_hour_F: 0.7468674382351348
+anova_wait_time_by_arrival_hour_p: 0.7973625594226361

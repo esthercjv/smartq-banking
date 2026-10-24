@@ -1,0 +1,130 @@
+{
+  "random_seed": 42,
+  "data": {
+    "rows_loaded": 560,
+    "rows_removed_negative_wait_time": 13,
+    "final_rows": 547,
+    "usecols": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "encoding": "utf-8-sig",
+    "features": [
+      "queue_length",
+      "arrival_hour",
+      "peak_hour"
+    ],
+    "target": "wait_time"
+  },
+  "split": {
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "library_versions": {
+    "pandas": "2.2.3",
+    "numpy": "2.2.5",
+    "scikit-learn": "1.6.1",
+    "joblib": "1.5.0",
+    "matplotlib": "3.10.3",
+    "scipy": "1.15.3"
+  },
+  "models": {
+    "Baseline": {
+      "train": {
+        "MAE": 3.9193606292120706,
+        "RMSE": 4.870046552319551,
+        "R2": 0.0
+      },
+      "test": {
+        "MAE": 3.615785729144997,
+        "RMSE": 4.335560830878124,
+        "R2": -0.008836642892406044
+      }
+    },
+    "Linear Regression": {
+      "train": {
+        "MAE": 3.909389812032355,
+        "RMSE": 4.855485110707603,
+        "R2": 0.005971060891069024
+      },
+      "test": {
+        "MAE": 3.623944298683046,
+        "RMSE": 4.366933373019702,
+        "R2": -0.023489547901869523
+      }
+    },
+    "Decision Tree": {
+      "train": {
+        "MAE": 3.8307245575707243,
+        "RMSE": 4.777187393673799,
+        "R2": 0.03777124755672778
+      },
+      "test": {
+        "MAE": 3.6463584975466348,
+        "RMSE": 4.441272136441187,
+        "R2": -0.05863208011781551
+      }
+    },
+    "Random Forest": {
+      "train": {
+        "MAE": 3.8350076567819205,
+        "RMSE": 4.778363260034097,
+        "R2": 0.03729749948003436
+      },
+      "test": {
+        "MAE": 3.6574752096202707,
+        "RMSE": 4.456019252593319,
+        "R2": -0.06567406673069898
+      }
+    }
+  },
+  "cv": {
+    "Baseline": {
+      "MAE_mean": 3.8609013407435255,
+      "MAE_std": 0.24029874289167175,
+      "RMSE_mean": 4.761460321497212,
+      "RMSE_std": 0.3075502464413047,
+      "R2_mean": -0.004846187199674157,
+      "R2_std": 0.0032692578348277215
+    },
+    "Linear Regression": {
+      "MAE_mean": 3.866993169711658,
+      "MAE_std": 0.2397986478016873,
+      "RMSE_mean": 4.769271193124709,
+      "RMSE_std": 0.2938892218689356,
+      "R2_mean": -0.00856908627890709,
+      "R2_std": 0.00870002675603269
+    },
+    "Decision Tree": {
+      "MAE_mean": 3.960210343564691,
+      "MAE_std": 0.2745183807224655,
+      "RMSE_mean": 4.9331683831507505,
+      "RMSE_std": 0.36266168422019296,
+      "R2_mean": -0.0778396827778816,
+      "R2_std": 0.03215135634305544
+    },
+    "Random Forest": {
+      "MAE_mean": 3.9515331002020253,
+      "MAE_std": 0.2659716637349466,
+      "RMSE_mean": 4.904887003426959,
+      "RMSE_std": 0.34195847744695856,
+      "R2_mean": -0.06579559679753735,
+      "R2_std": 0.020550914000093387
+    }
+  },
+  "model_selection": {
+    "best_cv_mae_name": "Baseline",
+    "baseline_was_best_by_cv_mae": true,
+    "selected_model_name": "Linear Regression",
+    "reason": "Selected model with lowest mean CV MAE among real models (Linear Regression, Decision Tree, Random Forest). Baseline was evaluated but not saved as selected model per instructions."
+  },
+  "margin_check": {
+    "margin": 4.366933373019702,
+    "percentage_within_margin": 65.45454545454545,
+    "description": "Percentage of test predictions where |actual - predicted| <= selected model test RMSE"
+  },
+  "coefficients_written": true
+}

@@ -19,7 +19,7 @@ import {
   Info,
   Timer
 } from 'lucide-react';
-import { predictWaitRounded } from '../predictWait';
+import { predictWaitMinutes } from '../ml/waitTimeModel';
 
 export default function QueueRegistration() {
   const navigate = useNavigate();
@@ -157,20 +157,9 @@ export default function QueueRegistration() {
       }
       const peopleAhead = aheadCount ?? 0;
 
-      const { count: activeCounterCount, error: counterError } = await supabase
-        .from('counters')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active');
-      if (counterError) {
-        console.error('Failed to count active counters:', counterError.message);
-      }
-      const activeCounters = Math.max(1, activeCounterCount ?? 0);
-
-      const estimated = predictWaitRounded({
-        baseWait: currentSelectedService.base_wait_minutes,
-        peopleAhead,
-        activeCounters,
-      });
+      // Estimate from the offline regression model (queue length + hour); same model as the Wait Time Prediction page.
+      const estimate = predictWaitMinutes(peopleAhead, new Date().getHours());
+      const estimated = Math.max(1, Math.round(estimate));
 
       const { data: ticket, error } = await supabase.rpc('issue_ticket', {
         p_service_id: currentSelectedService.id,
