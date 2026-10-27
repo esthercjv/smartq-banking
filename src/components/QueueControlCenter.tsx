@@ -39,6 +39,8 @@ export default function QueueControlCenter() {
   const [servedCount, setServedCount] = useState(0);
   const [avgHandlingSeconds, setAvgHandlingSeconds] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const [isCalling, setIsCalling] = useState(false);
+  const [mismatchedServicesWarning, setMismatchedServicesWarning] = useState(false);
 
   const showToast = (message: string, type: 'error' | 'success' = 'error') => {
     setToast({ message, type });
@@ -201,6 +203,28 @@ const loadServingTicket = async () => {
 };
 
 useEffect(() => {
+  const checkServiceMismatch = async () => {
+    if (!assignedCounter) {
+      setMismatchedServicesWarning(false);
+      return;
+    }
+    if (!assignedCounter.services || !Array.isArray(assignedCounter.services) || assignedCounter.services.length === 0) {
+      setMismatchedServicesWarning(false);
+      return;
+    }
+    try {
+      const { data } = await supabase.from('services').select('name').eq('status', 'active');
+      const activeNames = new Set((data || []).map((s: any) => String(s.name).trim().toLowerCase()));
+      const hasMatch = assignedCounter.services.some((s: string) => activeNames.has(String(s).trim().toLowerCase()));
+      setMismatchedServicesWarning(!hasMatch);
+    } catch {
+      setMismatchedServicesWarning(false);
+    }
+  };
+  checkServiceMismatch();
+}, [assignedCounter]);
+
+useEffect(() => {
   if (!assignedCounter) return;
   loadWaitingQueue();
   loadServingTicket();
@@ -209,6 +233,7 @@ useEffect(() => {
 }, [assignedCounter]);
 
   useEffect(() => {
+    if (!assignedCounter) return;
     const channel = supabase
       .channel('queues-realtime')
       .on(
@@ -226,7 +251,22 @@ useEffect(() => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [assignedCounter]);
+
+  useEffect(() => {
+    if (!assignedCounter) return;
+    loadWaitingQueue();
+    loadServingTicket();
+    loadServedCount();
+    loadAvgHandling();
+    const interval = setInterval(() => {
+      loadWaitingQueue();
+      loadServingTicket();
+      loadServedCount();
+      loadAvgHandling();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [assignedCounter]);
 
 useEffect(() => {
   (async () => {
@@ -260,9 +300,7 @@ useEffect(() => {
       return;
     }
 
-    if (waitingQueue.length === 0) {
-      console.warn('The waiting queue is currently empty.');
-      showToast('The waiting queue is currently empty.');
+    if (isCalling) {
       return;
     }
 
@@ -272,65 +310,70 @@ useEffect(() => {
       return;
     }
 
-    const startOfTodayStr = startOfToday();
-    let query = supabase
-      .from('queues')
-      .select('*')
-      .eq('status', 'waiting')
-      .gte('created_at', startOfTodayStr)
-      .order('created_at', { ascending: true })
-      .limit(1);
+    setIsCalling(true);
+    try {
+      const startOfTodayStr = startOfToday();
+      let query = supabase
+        .from('queues')
+        .select('*')
+        .eq('status', 'waiting')
+        .gte('created_at', startOfTodayStr)
+        .order('created_at', { ascending: true })
+        .limit(1);
 
-    if (assignedCounter.services && Array.isArray(assignedCounter.services) && assignedCounter.services.length > 0) {
-      query = query.in('service_name', assignedCounter.services);
-    }
+      if (assignedCounter.services && Array.isArray(assignedCounter.services) && assignedCounter.services.length > 0) {
+        query = query.in('service_name', assignedCounter.services);
+      }
 
-    const { data: candidates, error: fetchError } = await query;
-    if (fetchError) {
-      console.error('Failed to fetch next ticket:', fetchError.message);
-      showToast('Failed to load the next ticket.');
-      return;
-    }
-    if (!candidates || candidates.length === 0) {
-      showToast('The waiting queue is currently empty.');
-      loadWaitingQueue();
-      return;
-    }
-    const nextTicket = candidates[0];
+      const { data: candidates, error: fetchError } = await query;
+      if (fetchError) {
+        console.error('Failed to fetch next ticket:', fetchError.message);
+        showToast('Failed to load the next ticket.');
+        return;
+      }
+      if (!candidates || candidates.length === 0) {
+        showToast('The waiting queue is currently empty.');
+        loadWaitingQueue();
+        return;
+      }
+      const nextTicket = candidates[0];
 
-    const { data: claimed, error } = await supabase
-      .from('queues')
-      .update({ status: 'serving', called_at: new Date().toISOString(), counter_id: assignedCounter.name })
-      .eq('id', nextTicket.id)
-      .eq('status', 'waiting')
-      .select();
+      const { data: claimed, error } = await supabase
+        .from('queues')
+        .update({ status: 'serving', called_at: new Date().toISOString(), counter_id: assignedCounter.name })
+        .eq('id', nextTicket.id)
+        .eq('status', 'waiting')
+        .select();
 
-    if (error) {
-      console.error('Failed to call next customer: ' + error.message);
-      showToast('Failed to call next customer.');
-      loadWaitingQueue();
-      loadServingTicket();
-      return;
-    }
-    if (!claimed || claimed.length === 0) {
-      showToast('That customer was just called by another counter');
-      loadWaitingQueue();
-      loadServingTicket();
-      return;
-    }
+      if (error) {
+        console.error('Failed to call next customer: ' + error.message);
+        showToast('Failed to call next customer.');
+        loadWaitingQueue();
+        loadServingTicket();
+        return;
+      }
+      if (!claimed || claimed.length === 0) {
+        showToast('That customer was just called by another counter');
+        loadWaitingQueue();
+        loadServingTicket();
+        return;
+      }
 
-    setServingTicket({ ...waitingQueue.find(t => t.id === nextTicket.id) || {
-      id: claimed[0].id,
-      ticketNumber: claimed[0].ticket_number,
-      customerName: claimed[0].customer_name,
-      serviceType: claimed[0].service_name,
-      status: 'serving',
-      arrivalTime: claimed[0].issued_time,
-      estimatedWaitMinutes: claimed[0].estimated_wait,
-      counterId: claimed[0].counter_id ?? undefined,
-      createdAt: claimed[0].created_at,
-    }, status: 'serving' });
-    setWaitingQueue(prev => prev.filter(t => t.id !== nextTicket.id));
+      setServingTicket({ ...waitingQueue.find(t => t.id === nextTicket.id) || {
+        id: claimed[0].id,
+        ticketNumber: claimed[0].ticket_number,
+        customerName: claimed[0].customer_name,
+        serviceType: claimed[0].service_name,
+        status: 'serving',
+        arrivalTime: claimed[0].issued_time,
+        estimatedWaitMinutes: claimed[0].estimated_wait,
+        counterId: claimed[0].counter_id ?? undefined,
+        createdAt: claimed[0].created_at,
+      }, status: 'serving' });
+      setWaitingQueue(prev => prev.filter(t => t.id !== nextTicket.id));
+    } finally {
+      setIsCalling(false);
+    }
   };
 
   const handleCompleteCurrent = async () => {
@@ -575,6 +618,12 @@ useEffect(() => {
                     <span>No active counter is assigned to you. Please ask an admin to assign one.</span>
                   </div>
                 )}
+                {assignedCounter && mismatchedServicesWarning && (
+                  <div className="flex items-start gap-2.5 text-[11px] text-amber-800 font-semibold bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl mb-6">
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span>This counter is set to handle services that no longer exist, so no customers will appear. Please ask an admin to update the counter.</span>
+                  </div>
+                )}
 
                 <AnimatePresence mode="wait">
                   {servingTicket ? (
@@ -618,7 +667,7 @@ useEffect(() => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-6 mt-8 border-t border-outline-variant/30">
                 <button
                   onClick={handleCallNext}
-                  disabled={!assignedCounter}
+                  disabled={!assignedCounter || isCalling}
                   className="py-3 px-4 bg-secondary-container hover:bg-secondary text-[#584400] hover:text-on-secondary font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5" />

@@ -213,7 +213,7 @@ export default function QueueRegistration() {
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
       
       {/* Side Navigation Shell */}
-      <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50">
+      <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 transition-transform -translate-x-full md:translate-x-0">
         <div className="mb-8 px-2 flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center shadow-lg">
@@ -288,7 +288,7 @@ export default function QueueRegistration() {
       </aside>
 
       {/* Top Navigation Shell */}
-      <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-8 z-40">
+      <header className="fixed top-0 right-0 h-[60px] w-full md:ml-[250px] md:w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-4 md:px-8 z-40">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-lg text-primary tracking-tight">
             Register for Queue
@@ -313,7 +313,7 @@ export default function QueueRegistration() {
       </header>
 
       {/* Main Content Workspace */}
-      <main className="ml-[250px] pt-[80px] flex-grow min-h-screen p-8 bg-[#F2F2F2]">
+      <main className="md:ml-[250px] pt-[80px] flex-grow min-h-screen p-4 md:p-8 bg-[#F2F2F2]">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -446,19 +446,68 @@ export default function QueueRegistration() {
                 </div>
 
                 {(!fullName || !phoneNumber) && (
-                  <div className="flex items-start gap-2.5 text-[11px] text-amber-700 font-medium bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl mb-4">
-                    <span className="shrink-0 mt-0.5">⚠️</span>
-                    <span>
-                      Your profile is missing some details. Please{' '}
+                  <div className="flex flex-col gap-3 text-[11px] text-amber-700 font-medium bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl mb-4">
+                    <div className="flex items-start gap-2.5">
+                      <span className="shrink-0 mt-0.5">⚠️</span>
+                      <span>
+                        Your profile is missing some details. Add them below or{' '}
+                        <button
+                          type="button"
+                          onClick={() => navigate('/my-profile')}
+                          className="font-bold underline cursor-pointer"
+                        >
+                          update your profile
+                        </button>
+                        .
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {!fullName && (
+                        <input
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Full name"
+                          className="px-3 py-2 rounded-lg border border-amber-500/30 bg-white text-xs text-primary"
+                        />
+                      )}
+                      {!phoneNumber && (
+                        <input
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="Phone number (9-15 digits, + allowed)"
+                          className="px-3 py-2 rounded-lg border border-amber-500/30 bg-white text-xs text-primary"
+                        />
+                      )}
+                    </div>
+                    <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => navigate('/my-profile')}
-                        className="font-bold underline cursor-pointer"
+                        onClick={async () => {
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (!user) return;
+                            const cleaned = phoneNumber.replace(/[\s-]/g, '');
+                            if (cleaned && !/^\+?\d{9,15}$/.test(cleaned)) {
+                              setSubmitError('Invalid phone number. Use 9-15 digits, + allowed.');
+                              return;
+                            }
+                            const { error } = await supabase.from('profiles').update({ full_name: fullName, phone: phoneNumber }).eq('id', user.id);
+                            if (error) {
+                              setSubmitError(error.message);
+                              return;
+                            }
+                            setSubmitError(null);
+                          } catch (err: any) {
+                            setSubmitError(err.message);
+                          }
+                        }}
+                        className="px-4 py-2 bg-secondary-container text-[#584400] hover:bg-secondary hover:text-on-secondary font-bold text-xs rounded-lg"
                       >
-                        update your profile
+                        Save details
                       </button>
-                      {' '}before registering for a queue.
-                    </span>
+                    </div>
                   </div>
                 )}
 

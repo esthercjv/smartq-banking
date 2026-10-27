@@ -104,6 +104,25 @@ export default function NotificationBell({ buttonClassName }: NotificationBellPr
         return;
       }
 
+      if (ticket.status === 'no_show') {
+        addNotification({
+          key: `${ticket.id}:no_show`,
+          type: 'error',
+          title: 'Marked as No-Show',
+          message: `Ticket ${ticket.ticket_number} was marked as no-show because you were not present when called.`,
+          createdAt: Date.now(),
+          read: false,
+        });
+        deviceAlert({
+          userId: uid,
+          key: `${ticket.id}:no_show`,
+          title: 'Marked as No-Show',
+          body: `Ticket ${ticket.ticket_number} was marked as no-show because you were not present when called.`,
+        }).catch((err) => console.error('NotificationBell: device alert failed', err));
+        lastActiveTicketRef.current = null;
+        return;
+      }
+
       // Ticket issued
       addNotification({
         key: `${ticket.id}:issued`,

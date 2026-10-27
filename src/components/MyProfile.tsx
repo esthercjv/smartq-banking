@@ -93,7 +93,12 @@ export default function MyProfile() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.clear();
+    localStorage.removeItem('activeTicket');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('employeeId');
     navigate('/login');
   };
 
@@ -105,7 +110,7 @@ export default function MyProfile() {
   const renderSidebar = () => {
     if (userRole === 'customer') {
       return (
-        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50">
+        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 transition-transform -translate-x-full md:translate-x-0">
           <div className="mb-8 px-2 flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center shadow-lg">
@@ -181,7 +186,7 @@ export default function MyProfile() {
       );
     } else if (userRole === 'staff') {
       return (
-        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 text-white">
+        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 text-white transition-transform -translate-x-full md:translate-x-0">
           <div className="mb-0 px-2 flex flex-col gap-1">
             <div className="flex items-center gap-3 mt-4 mb-4">
               <div className="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center shadow-lg">
@@ -240,7 +245,7 @@ export default function MyProfile() {
     } else {
       const isAdmin = userRole === 'admin';
       return (
-        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 text-white">
+        <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 text-white transition-transform -translate-x-full md:translate-x-0">
           <div className="mb-8 px-2 flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center shadow-lg">
@@ -352,7 +357,7 @@ export default function MyProfile() {
       {renderSidebar()}
 
       {/* Top Navigation Shell */}
-      <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-8 z-40">
+      <header className="fixed top-0 right-0 h-[60px] w-full md:ml-[250px] md:w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-4 md:px-8 z-40">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-lg text-primary tracking-tight">
             My Profile
@@ -386,7 +391,7 @@ export default function MyProfile() {
       </header>
 
       {/* Main Content Workspace */}
-      <main className="ml-[250px] pt-[80px] flex-grow min-h-screen p-8 bg-[#F2F2F2]">
+      <main className="md:ml-[250px] pt-[80px] flex-grow min-h-screen p-4 md:p-8 bg-[#F2F2F2]">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

@@ -26,10 +26,11 @@ export default function CustomerDashboard() {
   const [activeTicket, setActiveTicket] = useState<any>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [liveNowServing, setLiveNowServing] = useState<{
     number: string;
     counter: string;
-    service: string;
+    service: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function CustomerDashboard() {
         navigate('/login');
         return;
       }
+      setCurrentUserId(session.user.id);
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -72,19 +74,23 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     const loadNowServing = async () => {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
       const { data, error } = await supabase
         .from('queues')
-        .select('*')
+        .select('ticket_number, counter_id, user_id, service_name')
         .eq('status', 'serving')
+        .gte('created_at', startOfToday.toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (data && !error) {
+        const isOwn = currentUserId && data.user_id === currentUserId;
         setLiveNowServing({
           number: data.ticket_number,
-          counter: data.counter_id ? `Counter ${data.counter_id}` : 'Counter',
-          service: data.service_name || 'Banking Service',
+          counter: data.counter_id || 'Counter',
+          service: isOwn ? data.service_name || 'Banking Service' : null,
         });
       } else {
         setLiveNowServing(null);
@@ -108,7 +114,7 @@ export default function CustomerDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     const loadTicket = async () => {
@@ -320,8 +326,10 @@ export default function CustomerDashboard() {
   const firstName = (fullName || verifiedEmail.split('@')[0]).split(' ')[0];
   const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const handleCancelTicket = async () => {
     if (!activeTicket?.id) return;
+    setCancelError(null);
     const { data: cancelled, error } = await supabase
       .from('queues')
       .update({ status: 'cancelled', completed_at: new Date().toISOString() })
@@ -330,7 +338,8 @@ export default function CustomerDashboard() {
       .select();
 
     if (error || !cancelled || cancelled.length === 0) {
-      alert('Could not cancel. Your ticket may already have been called.');
+      setCancelError('Could not cancel. Your ticket may already have been called.');
+      setTimeout(() => setCancelError(null), 5000);
       return;
     }
 
@@ -365,7 +374,7 @@ export default function CustomerDashboard() {
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
 
       {/* Side Navigation Shell */}
-      <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50">
+      <aside className="fixed left-0 top-0 h-full w-[250px] bg-primary-container shadow-lg flex flex-col p-4 z-50 transition-transform -translate-x-full md:translate-x-0">
         <div className="mb-8 px-2 flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center shadow-lg">
@@ -440,7 +449,7 @@ export default function CustomerDashboard() {
       </aside>
 
       {/* Top Navigation Shell */}
-      <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-8 z-40">
+      <header className="fixed top-0 right-0 h-[60px] w-full md:ml-[250px] md:w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-4 md:px-8 z-40">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-lg text-primary tracking-tight">
             My Dashboard
@@ -469,7 +478,7 @@ export default function CustomerDashboard() {
       </header>
 
       {/* Main Content Workspace */}
-      <main className="ml-[250px] pt-[80px] flex-grow min-h-screen p-8 bg-[#F2F2F2]">
+      <main className="md:ml-[250px] pt-[80px] flex-grow min-h-screen p-4 md:p-8 bg-[#F2F2F2]">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -555,8 +564,7 @@ export default function CustomerDashboard() {
                     <div className="flex items-center gap-3">
                       <Armchair className="w-5 h-5 text-secondary-container" />
                       <p className="text-surface-container-lowest font-semibold text-lg">
-                        {liveNowServing.counter} —{' '}
-                        <span className="text-secondary-fixed">{liveNowServing.service}</span>
+                        {liveNowServing.counter}{liveNowServing.service ? ' — ' : ''}{liveNowServing.service ? <span className="text-secondary-fixed">{liveNowServing.service}</span> : null}
                       </p>
                     </div>
                     <p className="text-xs text-blue-100/40 font-medium">
@@ -644,6 +652,9 @@ export default function CustomerDashboard() {
                   >
                     Cancel Virtual Ticket
                   </button>
+                  {cancelError && (
+                    <p className="mt-2 text-xs font-semibold text-red-600">{cancelError}</p>
+                  )}
                 </div>
               )}
             </div>

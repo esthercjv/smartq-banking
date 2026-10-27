@@ -6,12 +6,7 @@ import NotificationBell from './NotificationBell';
 import StaffNotificationBell from './StaffNotificationBell';
 import ManagementNotificationBell from './ManagementNotificationBell';
 import { deviceAlert, getAlertPermission, requestAlertPermission } from './ticketAlerts';
-import {
-  PEAK_FACTORS,
-  getTimeOfDayKey,
-  type TimeOfDayKey,
-} from '../predictWait';
-import { predictWaitMinutes } from '../ml/waitTimeModel';
+import { predictWaitMinutes, isPeakHour } from '../ml/waitTimeModel';
 import { 
   Landmark, 
   LogOut, 
@@ -68,7 +63,12 @@ export function AdminSidebar({ activeItem }: SidebarProps) {
 
   const handleLogout = async () => {
   await supabase.auth.signOut();
-  localStorage.clear();
+  localStorage.removeItem('activeTicket');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userId');
+  localStorage.removeItem('userEmail');
+  localStorage.removeItem('userName');
+  localStorage.removeItem('employeeId');
   navigate('/login');
 };
 
@@ -371,7 +371,7 @@ export function AdminLayout({ title, description, children }: CommonContentProps
 
   return (
     <div className="flex min-h-screen bg-[#F2F2F2] w-full text-on-surface select-none font-sans">
-      <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-8 z-40">
+      <header className="fixed top-0 right-0 h-[60px] w-full md:ml-[250px] md:w-[calc(100%-250px)] bg-surface-container-lowest shadow-sm border-b border-outline-variant/65 flex justify-between items-center px-4 md:px-8 z-40">
         <span className="font-semibold text-lg text-primary tracking-tight">{title}</span>
         <div className="flex items-center gap-3">
           {userRole === 'customer' ? (
@@ -391,7 +391,7 @@ export function AdminLayout({ title, description, children }: CommonContentProps
         </div>
       </header>
 
-      <main className="ml-[250px] pt-[80px] flex-grow min-h-screen p-8 bg-[#F2F2F2]">
+      <main className="md:ml-[250px] pt-[80px] flex-grow min-h-screen p-4 md:p-8 bg-[#F2F2F2]">
         <div className="pb-6 border-b border-outline-variant/30 mb-8">
           <h2 className="text-3xl font-bold tracking-tight text-primary">{title}</h2>
           <p className="text-sm text-on-surface-variant font-medium mt-1">{description}</p>
@@ -3181,7 +3181,6 @@ export function WaitTimePredictionScreen() {
   const [serviceCode, setServiceCode] = useState<string>('');
   const [peopleAhead, setPeopleAhead] = useState<number>(0);
   const [activeTellers, setActiveTellers] = useState<number>(1);
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDayKey>('afternoon');
 
   // Interactive delay simulation state
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
@@ -3259,8 +3258,6 @@ export function WaitTimePredictionScreen() {
         .eq('status', 'active');
       if (counterError) console.error('Error loading active counters:', counterError.message);
       else setActiveTellers(activeCounterCount && activeCounterCount > 0 ? activeCounterCount : 1);
-
-      setTimeOfDay(getTimeOfDayKey());
 
       // Recent tickets — the customer only ever sees their own.
       if (user) {
@@ -3356,7 +3353,6 @@ export function WaitTimePredictionScreen() {
       : (serviceOptions[0]?.id ?? '');
   const currentService = serviceOptions.find(s => s.id === effectiveServiceCode) ?? null;
   const currentServiceName = currentService?.name || ticketServiceName || '—';
-  const currentPeak = PEAK_FACTORS[timeOfDay];
 
   // Wait-time estimate from the offline regression model (src/ml/waitTimeModel.ts).
   // The model uses only queue length and hour of day; it is intentionally static.
@@ -3373,16 +3369,14 @@ export function WaitTimePredictionScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // The deadline is set only when the ticket, the queue position or the active
-  // counter count changes, so the timer never jumps on the 10-second refresh.
-  const currentServiceId = currentService?.id ?? null;
+  // The deadline is set only when the ticket changes, so the timer never jumps on the 10-second refresh.
   useEffect(() => {
     if (!activeTicket || activeTicket.status !== 'waiting') return;
     const totalMs = remainingMinutes * 60000;
     setEstimateTotalMs(totalMs);
     setDeadline(Date.now() + totalMs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTicket?.id, peopleAhead, activeTellers, currentServiceId]);
+  }, [activeTicket?.id, activeTicket?.status]);
 
   const remainingSeconds =
     deadline === null ? 0 : Math.max(0, Math.round((deadline - now) / 1000));
@@ -3505,36 +3499,19 @@ export function WaitTimePredictionScreen() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-on-surface-variant">Service Type</label>
-                    {hasActiveTicket ? (
-                      <>
-                        <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2.5 text-xs font-bold bg-[#F2F2F2] text-primary">
-                          {currentServiceName}
-                        </div>
-                        <p className="text-[10px] text-outline font-medium">From your active ticket</p>
-                      </>
-                    ) : (
-                      <select 
-                        value={effectiveServiceCode} 
-                        onChange={(e) => setServiceCode(e.target.value)}
-                        className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs focus:border-secondary focus:ring-1 focus:ring-secondary/20 outline-none transition-all font-bold bg-white cursor-pointer py-2.5"
-                      >
-                        {serviceOptions.length === 0 ? (
-                          <option value="">{servicesLoading ? 'Loading services...' : 'No services available'}</option>
-                        ) : (
-                          serviceOptions.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))
-                        )}
-                      </select>
-                    )}
-                  </div>
+                  {hasActiveTicket && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-on-surface-variant">Service Type</label>
+                      <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2.5 text-xs font-bold bg-[#F2F2F2] text-primary">
+                        From your active ticket
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-on-surface-variant">Time of Day</label>
                     <div className="w-full border-outline-variant/60 border rounded-[6px] px-3 py-2 text-xs font-bold bg-[#F2F2F2] text-primary">
-                      {currentPeak.label.replace(/\s*\(x[\d.]+\)/, '')}
+                      {isPeakHour(new Date().getHours()) ? 'Peak hours (9–11 and 14–16)' : 'Off-peak hours'}
                     </div>
                     <p className="text-[10px] text-outline font-medium">Based on current time</p>
                   </div>
@@ -3587,11 +3564,8 @@ export function WaitTimePredictionScreen() {
                       <h2 className="text-[64px] font-extrabold text-[#00081e] leading-tight mb-2 font-mono">
                         {finalWaitTime} <span className="text-2xl font-medium text-[#44464e] font-sans">minutes</span>
                       </h2>
-                      <p className="text-xs font-medium text-[#44464e] max-w-sm mb-12">
-                        Based on current branch traffic, historical peak patterns, and active counter availability.
-                      </p>
                       <p className="text-[10px] text-outline font-medium max-w-sm mb-12">
-                        Estimate from a regression model trained on queue length and hour of day. Service type and counters are not model inputs.
+                        Estimate from a regression model trained on queue length and hour of day. Service type and counters are not model inputs. The estimate is approximate and may differ from your actual wait.
                       </p>
 
                       {/* Device-alert opt-in — customers with an active ticket only */}

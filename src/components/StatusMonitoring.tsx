@@ -51,6 +51,7 @@ export default function StatusMonitoring() {
 
   // Role and Auth
 const [userRole, setUserRole] = useState<string | null>(null);
+const roleRef = React.useRef<string | null>(null);
 const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 const [loading, setLoading] = useState(true);
 const [searchQuery, setSearchQuery] = useState('');
@@ -91,6 +92,7 @@ const namePrefix = userEmail ? userEmail.split('@')[0] : '';
     }
 
     setUserRole(profile.role);
+    roleRef.current = profile.role;
     setUserEmail(profile.email || session.user.email || '');
     setLoading(false);
   };
@@ -107,7 +109,7 @@ const loadLiveData = async () => {
   // Get currently serving ticket
   const { data: servingData } = await supabase
     .from('queues')
-    .select('ticket_number, service_name, customer_name, user_id')
+    .select('ticket_number, service_name, user_id')
     .eq('status', 'serving')
     .gte('created_at', startOfTodayStr)
     .order('created_at', { ascending: false })
@@ -136,9 +138,9 @@ const loadLiveData = async () => {
   // Get queue list. Customers must never fetch other people's service types
   // into the browser (privacy): they get a restricted column set and their own
   // service names are merged in separately.
-  const effectiveRole = userRole ?? localStorage.getItem('userRole');
+  const effectiveRole = (roleRef.current ?? userRole) ?? localStorage.getItem('userRole');
   const currentUid = currentUserId ?? localStorage.getItem('userId');
-  const isCustomerQuery = effectiveRole === 'customer';
+  const isCustomerQuery = effectiveRole !== 'staff' && effectiveRole !== 'manager' && effectiveRole !== 'admin';
 
   const queueSelect = isCustomerQuery
     ? 'id, ticket_number, status, estimated_wait, created_at, user_id'
@@ -227,8 +229,9 @@ const loadLiveData = async () => {
       }
     });
 
-    const role = userRole ?? localStorage.getItem('userRole');
-    const staffIds = role !== 'customer'
+    const role = (roleRef.current ?? userRole) ?? localStorage.getItem('userRole');
+    const isPrivileged = role === 'staff' || role === 'manager' || role === 'admin';
+    const staffIds = isPrivileged
       ? Array.from(new Set((countersTable as any[]).map(c => c.staff_id).filter(Boolean)))
       : [];
     const staffNames = new Map<string, string>();
@@ -250,10 +253,10 @@ const loadLiveData = async () => {
         return {
           key: String(c.id ?? i),
           label: c.name ?? 'Counter',
-          service: serving?.service ?? '',
+          service: isPrivileged ? (serving?.service ?? '') : '',
           ticket: serving?.ticket ?? '—',
           state: c.status === 'active' ? (serving ? 'serving' : 'idle') : 'inactive',
-          staffName: role !== 'customer' && c.staff_id ? (staffNames.get(c.staff_id) ?? '') : null
+          staffName: isPrivileged && c.staff_id ? (staffNames.get(c.staff_id) ?? '') : null
         } as CounterRow;
       })
     );
@@ -280,8 +283,13 @@ useEffect(() => {
     })
     .subscribe();
 
+  const interval = setInterval(() => {
+    loadLiveData();
+  }, 10000);
+
   return () => {
     supabase.removeChannel(channel);
+    clearInterval(interval);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [autoRefresh]);
@@ -346,7 +354,7 @@ const handleLogout = async () => {
 
     if (isCustomer) {
       return (
-        <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans">
+        <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans transition-transform -translate-x-full md:translate-x-0">
           <div className="mb-8 px-2 flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[#fed977] rounded-[10px] flex items-center justify-center shadow-lg">
@@ -423,7 +431,7 @@ const handleLogout = async () => {
 
     if (isStaff) {
       return (
-        <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans">
+        <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans transition-transform -translate-x-full md:translate-x-0">
           <div className="mb-8 px-2 flex flex-col gap-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[#fed977] rounded-[10px] flex items-center justify-center shadow-lg">
@@ -491,7 +499,7 @@ const handleLogout = async () => {
 
     // Manager and Admin
     return (
-      <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans">
+      <aside className="fixed left-0 top-0 h-full w-[250px] bg-[#0a1f44] shadow-lg flex flex-col p-4 z-50 text-white font-sans transition-transform -translate-x-full md:translate-x-0">
         <div className="mb-8 px-2 flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#fed977] rounded-[10px] flex items-center justify-center shadow-lg">
@@ -606,7 +614,7 @@ const handleLogout = async () => {
       {renderSidebar()}
 
       {/* 2. Top Navigation Bar */}
-      <header className="fixed top-0 right-0 h-[60px] ml-[250px] w-[calc(100%-250px)] bg-white border-b border-[#c5c6cf] flex justify-between items-center px-8 z-40">
+      <header className="fixed top-0 right-0 h-[60px] w-full md:ml-[250px] md:w-[calc(100%-250px)] bg-white border-b border-[#c5c6cf] flex justify-between items-center px-4 md:px-8 z-40">
         <h2 className="text-[#00081e] font-semibold text-lg tracking-tight flex items-center gap-2">
           <Activity className="w-5 h-5 text-[#755b00]" /> Queue Status Monitor
         </h2>
@@ -654,7 +662,7 @@ const handleLogout = async () => {
       </header>
 
       {/* 3. Main Board Canvas */}
-      <main className="ml-[250px] pt-[84px] p-8 flex-grow min-h-screen">
+      <main className="md:ml-[250px] pt-[84px] p-4 md:p-8 flex-grow min-h-screen">
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
