@@ -106,15 +106,34 @@ const loadLiveData = async () => {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTodayStr = startOfToday.toISOString();
 
+  // Customers cannot read other people's rows (RLS): they use a limited-column RPC.
+  const roleNow = (roleRef.current ?? userRole) ?? localStorage.getItem('userRole');
+  const customerMode = roleNow !== 'staff' && roleNow !== 'manager' && roleNow !== 'admin';
+  const uidNow = currentUserId ?? localStorage.getItem('userId');
+  let snap: any[] = [];
+  if (customerMode) {
+    const { data: snapData, error: snapError } = await supabase.rpc('queue_snapshot', { p_since: startOfTodayStr });
+    if (snapError) console.error('Failed to load queue snapshot:', snapError.message);
+    snap = snapData ?? [];
+  }
+
   // Get currently serving ticket
-  const { data: servingData } = await supabase
-    .from('queues')
-    .select('ticket_number, service_name, user_id')
-    .eq('status', 'serving')
-    .gte('created_at', startOfTodayStr)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let servingData: any = null;
+  if (customerMode) {
+    const s = snap.filter((r: any) => r.status === 'serving')
+      .sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1))[0];
+    servingData = s ? { ticket_number: s.ticket_number, service_name: s.service_name, user_id: s.is_mine ? uidNow : null } : null;
+  } else {
+    const { data } = await supabase
+      .from('queues')
+      .select('ticket_number, service_name, user_id')
+      .eq('status', 'serving')
+      .gte('created_at', startOfTodayStr)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    servingData = data;
+  }
 
   if (servingData) {
     setNowServing(servingData.ticket_number);
@@ -127,11 +146,17 @@ const loadLiveData = async () => {
   }
 
   // Get waiting count
-  const { count } = await supabase
-    .from('queues')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'waiting')
-    .gte('created_at', startOfTodayStr);
+  let count: number | null = null;
+  if (customerMode) {
+    count = snap.filter((r: any) => r.status === 'waiting').length;
+  } else {
+    const res = await supabase
+      .from('queues')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'waiting')
+      .gte('created_at', startOfTodayStr);
+    count = res.count;
+  }
 
   setWaitingCount(count || 0);
 
@@ -153,27 +178,30 @@ const loadLiveData = async () => {
     .gte('created_at', startOfTodayStr)
     .order('created_at', { ascending: true });
 
-  const { data: queueList } = await queueQuery;
+  let queueList: any[] | null = null;
+  if (customerMode) {
+    queueList = snap.map((r: any) => ({
+      id: r.ticket_number,
+      ticket_number: r.ticket_number,
+      status: r.status,
+      estimated_wait: r.estimated_wait,
+      created_at: r.created_at,
+      user_id: r.is_mine ? uidNow : null,
+      service_name: r.service_name ?? '',
+    }));
+  } else {
+    const res = await queueQuery;
+    queueList = res.data as any[] | null;
+  }
 
   if (queueList) {
     if (isCustomerQuery) {
-      const ownIds = queueList
-        .filter((r: any) => r.user_id && currentUid && r.user_id === currentUid)
-        .map((r: any) => r.id);
-
       const ownServices = new Map<string, string>();
-      if (ownIds.length > 0) {
-      const { data: ownRows } = await (supabase
-          .from('queues')
-          .select('id, service_name') as any)
-          .in('id', ownIds);
-        (ownRows || []).forEach((r: any) => ownServices.set(r.id, r.service_name));
-      }
 
       setQueueItems(
         queueList.map((r: any) => ({
           ...r,
-          service_name: ownServices.get(r.id) ?? '',
+          service_name: r.service_name ?? '',
         })) as QueueRow[]
       );
     } else {
@@ -182,11 +210,13 @@ const loadLiveData = async () => {
   }
 
   // Real average wait time from actual data
-  const { data: avgData } = await supabase
-    .from('queues')
-    .select('estimated_wait')
-    .eq('status', 'waiting')
-    .gte('created_at', startOfTodayStr);
+  const avgData: any[] | null = customerMode
+    ? snap.filter((r: any) => r.status === 'waiting')
+    : (await supabase
+        .from('queues')
+        .select('estimated_wait')
+        .eq('status', 'waiting')
+        .gte('created_at', startOfTodayStr)).data;
 
   if (avgData && avgData.length > 0) {
     const avg = avgData.reduce((sum, r) => sum + (r.estimated_wait || 0), 0) / avgData.length;
@@ -209,11 +239,13 @@ const loadLiveData = async () => {
   } else if (!countersTable || countersTable.length === 0) {
     setCounters([]);
   } else {
-    const { data: servingRows, error: servingError } = await supabase
-      .from('queues')
-      .select('ticket_number, service_name, counter_id')
-      .eq('status', 'serving')
-      .gte('created_at', startOfTodayStr);
+    const { data: servingRows, error: servingError } = customerMode
+      ? { data: snap.filter((r: any) => r.status === 'serving'), error: null as any }
+      : await supabase
+          .from('queues')
+          .select('ticket_number, service_name, counter_id')
+          .eq('status', 'serving')
+          .gte('created_at', startOfTodayStr);
 
     if (servingError) {
       console.error('Failed to load serving tickets:', servingError.message);
